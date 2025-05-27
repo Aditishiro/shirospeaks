@@ -1,0 +1,164 @@
+
+[
+  {
+    "collection": "users",
+    "documents": [
+      {
+        "userId": "user_genZ_investor_1",
+        "name": "Alex Smith",
+        "email": "alex.smith@example.com",
+        "preferredTone": "casual",
+        "userSegment": "genZ",
+        "riskProfile": "aggressive",
+        "lastActive": {
+          "__datatype__": "timestamp",
+          "value": "2025-05-27T17:50:00Z"
+        },
+        "memoryRefs": []
+      },
+      {
+        "userId": "user_business_conservative_1",
+        "name": "Maria Garcia",
+        "email": "maria.g@example.com",
+        "preferredTone": "formal",
+        "userSegment": "business",
+        "riskProfile": "conservative",
+        "lastActive": {
+          "__datatype__": "timestamp",
+          "value": "2025-05-27T17:45:00Z"
+        },
+        "memoryRefs": []
+      },
+      {
+        "userId": "user_investor_balanced_1",
+        "name": "John Doe",
+        "email": "john.doe@example.com",
+        "preferredTone": "empathetic",
+        "userSegment": "investor",
+        "riskProfile": "balanced",
+        "lastActive": {
+          "__datatype__": "timestamp",
+          "value": "2025-05-27T17:40:00Z"
+        },
+        "memoryRefs": []
+      }
+    ]
+  },
+  {
+    "collection": "faqs",
+    "documents": [
+      {
+        "faqId": "faq_001_savings_account",
+        "question": "What are the eligibility criteria for a standard savings account?",
+        "answer": "To open a standard savings account, you must be at least 18 years old, a resident of the country, and possess a valid government-issued ID. A minimum initial deposit of 500 units is required.",
+        "sources": ["internal_policy_doc_v1.2", "website_faq_section"],
+        "embeddings": [],
+        "category": "Savings Accounts",
+        "lastUpdated": {
+          "__datatype__": "timestamp",
+          "value": "2025-05-20T09:00:00Z"
+        }
+      },
+      {
+        "faqId": "faq_002_loan_application",
+        "question": "How can I apply for a personal loan?",
+        "answer": "You can apply for a personal loan directly through our mobile app or our online portal. Navigate to the 'Loans' section, select 'Personal Loan', and follow the guided application process. Required documents include proof of income, address, and identity. Approval typically takes 2-3 business days.",
+        "sources": ["personal_loan_guide.pdf", "app_loan_flow_v1.0"],
+        "embeddings": [],
+        "category": "Loans",
+        "lastUpdated": {
+          "__datatype__": "timestamp",
+          "value": "2025-05-20T09:15:00Z"
+        }
+      },
+      {
+        "faqId": "faq_003_credit_card_benefits",
+        "question": "What are the main benefits of the Titanium Credit Card?",
+        "answer": "The Titanium Credit Card offers 2% cashback on all online purchases, complimentary travel insurance, access to airport lounges, and a low annual fee waiver for the first year. It also includes fraud protection and 24/7 customer support.",
+        "sources": ["titanium_card_brochure.pdf"],
+        "embeddings": [],
+        "category": "Credit Cards",
+        "lastUpdated": {
+          "__datatype__": "timestamp",
+          "value": "2025-05-20T09:30:00Z"
+        }
+      },
+      {
+        "faqId": "faq_004_digital_security",
+        "question": "How does LUMEN protect my account security online?",
+        "answer": "LUMEN employs multi-factor authentication, end-to-end encryption for all data transfers, and continuous fraud monitoring. We also provide secure login methods and regularly update our security protocols.",
+        "sources": ["security_policy_v3.0", "lumen_security_whitepaper.pdf"],
+        "embeddings": [],
+        "category": "Security",
+        "lastUpdated": {
+          "__datatype__": "timestamp",
+          "value": "2025-05-20T09:45:00Z"
+        }
+      },
+      {
+        "faqId": "faq_005_contact_support",
+        "question": "How can I contact customer support?",
+        "answer": "You can reach our customer support team 24/7 via the in-app chat, by calling our toll-free number at 1-800-LUMEN-AI, or by emailing support@lumen.com.",
+        "sources": ["contact_us_page"],
+        "embeddings": [],
+        "category": "General",
+        "lastUpdated": {
+          "__datatype__": "timestamp",
+          "value": "2025-05-20T10:00:00Z"
+        }
+      }
+    ]
+  },
+  {
+    "collection": "productUpdates",
+    "documents": [
+      {
+        "updateId": "update_001_new_loan_scheme",
+        "productType": "loan",
+        "summary": "New Green Home Loan scheme launched with preferential rates for sustainable homes.",
+        "effectiveDate": {
+          "__datatype__": "timestamp",
+          "value": "2025-05-25T00:00:00Z"
+        },
+        "updateBody": "LUMEN is excited to announce the launch of our new 'Green Home Loan' scheme, offering preferential interest rates starting from 3.5% for properties that meet certified sustainability standards. This initiative supports eco-friendly living and includes simplified application processes for qualifying properties. Terms and conditions apply, available on our website.",
+        "sourceLink": "https://www.lumen.com/greenhomeloan",
+        "processed": false
+      },
+      {
+        "updateId": "update_002_card_rewards_change",
+        "productType": "card",
+        "summary": "Changes to rewards points accumulation for Platinum Credit Card holders.",
+        "effectiveDate": {
+          "__datatype__": "timestamp",
+          "value": "2025-06-01T00:00:00Z"
+        },
+        "updateBody": "Effective June 1, 2025, Platinum Credit Card holders will earn 1.5 rewards points per unit spent on all categories, excluding utility bill payments, which will now earn 0.5 points per unit. All other benefits remain unchanged. Please refer to the updated terms and conditions for full details.",
+        "sourceLink": "https://www.lumen.com/cardrewardsupdate",
+        "processed": false
+      }
+    ]
+  },
+  {
+    "collection": "adminSettings",
+    "documents": [
+      {
+        "documentId": "global",
+        "toneWeights": {
+          "casual": 0.3,
+          "formal": 0.6,
+          "empathetic": 0.1
+        },
+        "fallbackResponses": {
+          "no_answer": "I apologize, but I don't have the information you're looking for at the moment. Can I help with anything else?",
+          "technical_issue": "It seems I'm experiencing a technical hiccup. Please try again in a moment or contact our human support.",
+          "off_topic": "My expertise is in banking and financial services. Can I assist you with something related to your accounts or products?"
+        },
+        "autoUpdateToggle": true,
+        "defaultLLMModel": "gpt-3.5-turbo",
+        "defaultTemperature": 0.7
+      }
+    ]
+  }
+]
+
+    
