@@ -42,7 +42,6 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
           placeholder="Type your message..."
           className="flex-grow resize-none pr-16 rounded-lg shadow-sm focus-visible:ring-1 focus-visible:ring-ring"
           rows={1}
-          maxRows={5}
           aria-label="Chat message input"
         />
         <Button
