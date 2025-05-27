@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 import path from 'path'; // Import the 'path' module
 
@@ -26,8 +27,11 @@ const nextConfig: NextConfig = {
 
     // For client-side bundles, prevent errors when Node.js-specific modules are imported.
     if (!isServer) {
+      const shimPath = path.resolve(__dirname, 'src/lib/empty-async-hooks-shim.ts');
       // Alias 'async_hooks' to an empty shim file for client-side bundles.
-      config.resolve.alias.async_hooks = path.resolve(__dirname, 'src/lib/empty-async-hooks-shim.ts');
+      config.resolve.alias.async_hooks = shimPath;
+      // Alias the problematic OpenTelemetry module to the same empty shim.
+      config.resolve.alias['@opentelemetry/context-async-hooks'] = shimPath;
     }
 
     // Important: return the modified config
