@@ -30,10 +30,11 @@ export async function generateAiResponse(
   return generateAiResponseFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'generateAiResponsePrompt',
+// New prompt definition that asks for plain text output
+const plainTextPrompt = ai.definePrompt({
+  name: 'generateAiResponsePlainTextPrompt',
   input: {schema: GenerateAiResponseInputSchema},
-  output: {schema: GenerateAiResponseOutputSchema},
+  // No output schema here, model will return plain text.
   prompt: `You are LUMEN, an AI assistant for a neobank.
 The user's latest message is: "{{currentMessage}}"
 
@@ -41,8 +42,7 @@ Consider the following conversation history:
 {{{conversationHistory}}}
 
 Your task is to generate a direct, helpful, and conversational textual response to the user's current message. This response should directly address their query or statement.
-
-Respond strictly in the JSON format specified by the output schema, ensuring the 'responseText' field contains your full conversational answer.
+ONLY provide the textual response. Do not include any other information or formatting.
 `,
 });
 
@@ -50,16 +50,21 @@ const generateAiResponseFlow = ai.defineFlow(
   {
     name: 'generateAiResponseFlow',
     inputSchema: GenerateAiResponseInputSchema,
-    outputSchema: GenerateAiResponseOutputSchema,
+    outputSchema: GenerateAiResponseOutputSchema, // The flow still adheres to this output schema
   },
   async input => {
-    const {output} = await prompt(input);
-    if (!output || !output.responseText) {
-      // Fallback in case the LLM fails to generate valid structured output
+    // Call the plain text prompt
+    const llmResponse = await plainTextPrompt(input);
+    const textOutput = llmResponse.text;
+
+    if (!textOutput || textOutput.trim() === "") {
+      // Fallback in case the LLM fails to generate a valid textual response
       return {
-        responseText: "I'm sorry, I had trouble formulating a full response. Could you try rephrasing?",
+        responseText: "I'm sorry, I had trouble formulating a response. Could you try rephrasing?",
       };
     }
-    return output;
+    // Manually construct the expected output object
+    return { responseText: textOutput };
   }
 );
+
