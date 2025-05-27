@@ -29,7 +29,10 @@ type GenerateAiResponseOutput = z.infer<typeof GenerateAiResponseOutputSchema>;
 export async function generateAiResponse(
   input: GenerateAiResponseInput
 ): Promise<GenerateAiResponseOutput> {
-  console.log('[generateAiResponse] Flow started with input message:', JSON.stringify(input.currentMessage));
+  console.log('[generateAiResponse] Flow started. Input currentMessage:', JSON.stringify(input.currentMessage));
+  // Log the full input being sent to the prompt for detailed debugging
+  console.log('[generateAiResponse] Full input for prompt:', JSON.stringify(input, null, 2));
+
   try {
     console.log('[generateAiResponse] Calling generateAiResponsePrompt...');
     const {output} = await generateAiResponsePrompt(input);
@@ -43,31 +46,36 @@ export async function generateAiResponse(
     }
     console.log("[generateAiResponse] Successfully processed response:", output.responseText);
     return output;
-  } catch (error) {
-    console.error("[generateAiResponse] Error in flow:", error);
-    // Check if the error object has more details, e.g., error.message
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    console.error("[generateAiResponse] Error details:", errorMessage);
+  } catch (error: any) {
+    console.error("[generateAiResponse] Error in flow. Full error object:", error);
+    // Log specific properties if they exist
+    if (error && error.message) {
+      console.error("[generateAiResponse] Error message:", error.message);
+    }
+    if (error && error.stack) {
+      console.error("[generateAiResponse] Error stack:", error.stack);
+    }
+    // Attempt to stringify the error if it's an object, for more details
+    try {
+      console.error("[generateAiResponse] Stringified error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    } catch (e) {
+      console.error("[generateAiResponse] Could not stringify error object.");
+    }
+    
     return {
       responseText: "I encountered an unexpected issue processing your request. Please try again in a moment.",
     };
   }
 }
 
-// Prompt definition that asks for structured output adhering to GenerateAiResponseOutputSchema
+// Simplified prompt for diagnostics
 const generateAiResponsePrompt = ai.definePrompt({
   name: 'generateAiResponsePrompt',
   input: {schema: GenerateAiResponseInputSchema},
-  output: {schema: GenerateAiResponseOutputSchema}, // Genkit will try to make the model's output fit this
-  prompt: `You are LUMEN, an AI assistant for a neobank.
-The user's latest message is: "{{currentMessage}}"
-
-Consider the following conversation history (if any):
+  output: {schema: GenerateAiResponseOutputSchema},
+  prompt: `User's message: "{{currentMessage}}"
+Conversation history:
 {{{conversationHistory}}}
 
-Your task is to generate a direct, helpful, and conversational textual response to the user's current message.
-Focus on providing the most relevant and concise textual answer. The output should be suitable for direct display to the user.`,
-  // Removed explicit instructions for JSON output from the prompt text itself.
-  // The output.schema will guide Genkit to expect a JSON structure like { "responseText": "..." }.
+Provide a concise textual response.`,
 });
-

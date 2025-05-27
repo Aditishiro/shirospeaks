@@ -14,6 +14,7 @@ import { useConversations } from "@/hooks/useConversations";
 import type { Message as MessageType } from "@/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
+const AI_RESPONSE_TIMEOUT_MS = 30000; // 30 seconds
 
 export function ChatView() {
   const {
@@ -25,6 +26,7 @@ export function ChatView() {
   const { messages, isLoadingMessages, addMessage } = useMessages(selectedConversationId);
   const { updateConversation } = useConversations();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const aiResponseAbortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
@@ -43,6 +45,12 @@ export function ChatView() {
     if (!selectedConversationId || !messageText.trim()) return;
 
     setIsAiResponding(true);
+    if (aiResponseAbortControllerRef.current) {
+      aiResponseAbortControllerRef.current.abort(); // Abort previous request if any
+    }
+    aiResponseAbortControllerRef.current = new AbortController();
+    const signal = aiResponseAbortControllerRef.current.signal;
+
     const userMessageId = Date.now().toString();
     const userMessageForHistory: MessageType = {
       id: userMessageId,
@@ -59,37 +67,78 @@ export function ChatView() {
       });
 
       const currentMessages = messages ?? [];
-      const MAX_HISTORY_FOR_PROMPT = 10; // Limit to last 10 messages for prompt context
+      const MAX_HISTORY_FOR_PROMPT = 10; 
       const recentMessagesForPrompt = currentMessages.slice(-MAX_HISTORY_FOR_PROMPT);
 
       const conversationHistoryForPrompt = recentMessagesForPrompt
         .concat([userMessageForHistory])
-        .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`) // Removed suggestions from history prompt
+        .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`)
         .join("\n");
 
-      const aiResponseData = await generateAiResponse({ conversationHistory: conversationHistoryForPrompt, currentMessage: messageText });
+      const aiResponsePromise = generateAiResponse({ 
+        conversationHistory: conversationHistoryForPrompt, 
+        currentMessage: messageText 
+      });
 
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('AI response timeout')), AI_RESPONSE_TIMEOUT_MS)
+      );
+      
+      let aiResponseData;
+      try {
+        // @ts-ignore
+        aiResponseData = await Promise.race([aiResponsePromise, timeoutPromise]);
+         if (signal.aborted) {
+          console.log("AI response aborted by new message send");
+          return; // Don't process if aborted
+        }
+      } catch (raceError: any) {
+        if (raceError.message === 'AI response timeout') {
+          console.error("AI response timed out.");
+          await addMessage({
+            conversationId: selectedConversationId,
+            text: "Sorry, I'm taking too long to respond. Please try again.",
+            sender: "ai",
+          });
+        } else {
+           console.error("Error in generateAiResponse race:", raceError);
+           await addMessage({
+            conversationId: selectedConversationId,
+            text: "Sorry, I encountered an error. Please try again.",
+            sender: "ai",
+          });
+        }
+        setIsAiResponding(false);
+        return;
+      }
+
+
+      if (!aiResponseData || !aiResponseData.responseText) {
+        console.warn("Received empty or invalid AI response data:", aiResponseData);
+        await addMessage({
+          conversationId: selectedConversationId,
+          text: "I seem to be having trouble. Could you try again?",
+          sender: "ai",
+        });
+        setIsAiResponding(false);
+        return;
+      }
+      
       await addMessage({
         conversationId: selectedConversationId,
         text: aiResponseData.responseText,
         sender: "ai",
-        // suggestions: aiResponseData.suggestedActions, // Suggestions removed for speed
       });
 
-      // For summarization, use the full history available up to this point
       const aiMessageForSummary: MessageType = {
         id: Date.now().toString() + "_ai",
         text: aiResponseData.responseText,
         sender: "ai",
-        // suggestions: aiResponseData.suggestedActions, // Suggestions removed
         timestamp: new Date(),
       };
-      // currentMessages includes all messages fetched so far for the conversation
-      // userMessageForHistory is the current user message
-      // aiMessageForSummary is the AI response we just received
       const updatedMessagesForSummary = currentMessages.concat([userMessageForHistory, aiMessageForSummary]);
       const fullHistoryForSummary = updatedMessagesForSummary
-         .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`) // Removed suggestions from history prompt
+         .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`)
         .join("\n");
 
       if (selectedConversationId) {
@@ -106,18 +155,20 @@ export function ChatView() {
 
     } catch (error) {
       console.error("Error in chat flow:", error);
-       await addMessage({
-        conversationId: selectedConversationId,
-        text: "Sorry, I encountered an error. Please try again.",
-        sender: "ai",
-      });
+      if (selectedConversationId) { // Ensure selectedConversationId is still valid
+         await addMessage({
+            conversationId: selectedConversationId,
+            text: "Sorry, I encountered an error. Please try again.",
+            sender: "ai",
+          });
+      }
     } finally {
       setIsAiResponding(false);
+      aiResponseAbortControllerRef.current = null;
     }
   };
 
   const handleSuggestionClick = (suggestionText: string) => {
-    // This function might need to be re-evaluated if suggestions are added back differently
     handleSendMessage(suggestionText);
   };
 
@@ -140,7 +191,6 @@ export function ChatView() {
      );
   }
 
-  // Display a message if the chat is empty after loading and AI is not responding to first message
   if (!isLoadingMessages && selectedConversationId && messages && messages.length === 0 && !isAiResponding) {
     return (
       <div className="flex flex-col h-full bg-background">
