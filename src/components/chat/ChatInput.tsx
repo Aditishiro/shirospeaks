@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from "react";
@@ -31,7 +32,7 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="sticky bottom-0 left-0 right-0 p-4 bg-background border-t border-border shadow- ऊपर"
+      className="sticky bottom-0 left-0 right-0 p-4 bg-background border-t border-border shadow-md"
     >
       <div className="relative flex items-center space-x-2">
         <Textarea

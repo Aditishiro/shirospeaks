@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Message } from "@/types";
@@ -9,6 +10,7 @@ import { format } from 'date-fns';
 import { useMessages } from "@/hooks/useMessages";
 import { useAppContext } from "@/contexts/AppContext";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import React, { useEffect, useState } from "react";
 
 interface ChatMessageProps {
   message: Message;
@@ -20,6 +22,23 @@ export function ChatMessage({ message, onSuggestionClick }: ChatMessageProps) {
   const { updateMessageFeedback } = useMessages(selectedConversationId);
   const isUser = message.sender === "user";
   const isSystem = message.sender === "system"; // For initial prompt
+  const [formattedTimestamp, setFormattedTimestamp] = useState<string>("");
+
+  useEffect(() => {
+    if (message.timestamp) {
+      try {
+        const dateToFormat = message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp as any);
+        if (!isNaN(dateToFormat.getTime())) {
+          setFormattedTimestamp(format(dateToFormat, "p"));
+        } else {
+          setFormattedTimestamp(""); 
+        }
+      } catch (e) {
+        console.error("Error formatting timestamp:", e);
+        setFormattedTimestamp(""); 
+      }
+    }
+  }, [message.timestamp]);
 
   const handleFeedback = async (feedback: "up" | "down") => {
     if (!selectedConversationId) return;
@@ -79,7 +98,7 @@ export function ChatMessage({ message, onSuggestionClick }: ChatMessageProps) {
         {(message.sender === "ai" || isSystem || isUser) && (
           <CardFooter className="px-3 py-1 justify-end items-center">
             <span className="text-xs text-muted-foreground mr-2">
-              {message.timestamp ? format(new Date(message.timestamp), "p") : ""}
+              {formattedTimestamp || ""}
             </span>
             {message.sender === "ai" && (
               <div className="flex space-x-1">
