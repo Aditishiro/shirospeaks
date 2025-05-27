@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useRef, useCallback } from "react";
@@ -6,12 +7,14 @@ import { useMessages } from "@/hooks/useMessages";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, MessageCircle } from "lucide-react";
+import { Loader2, MessageCircle, Bot } from "lucide-react"; // Added Bot
 import { generateInitialPrompt } from "@/ai/flows/generate-initial-prompt";
-import { generateAiResponse } from "@/ai/flows/generate-ai-response"; // Updated import
+import { generateAiResponse } from "@/ai/flows/generate-ai-response";
 import { summarizeConversation } from "@/ai/flows/summarize-conversation";
 import { useConversations } from "@/hooks/useConversations";
 import type { Message as MessageType } from "@/types";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
 
 export function ChatView() {
   const {
@@ -37,9 +40,22 @@ export function ChatView() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // Effect to load initial system prompt for an empty, selected conversation
   useEffect(() => {
     const setupInitialPrompt = async () => {
-      if (selectedConversationId && (!messages || messages.length === 0) && !isLoadingMessages && !isAiResponding) {
+      if (
+        selectedConversationId &&
+        messages && // Ensure messages array is available (i.e., query has resolved)
+        messages.length === 0 &&
+        !isLoadingMessages && // Ensure messages are not currently being loaded
+        !isAiResponding // Ensure another AI operation isn't in progress
+      ) {
+        // Check if a system prompt already exists to prevent duplicates
+        const hasSystemMessage = messages.some(msg => msg.sender === 'system');
+        if (hasSystemMessage) {
+          return;
+        }
+
         setIsAiResponding(true);
         try {
           const initialPromptData = await generateInitialPrompt();
@@ -48,15 +64,20 @@ export function ChatView() {
               conversationId: selectedConversationId,
               text: initialPromptData.prompt,
               sender: "system",
-              // Optionally, add hardcoded suggestions for the initial system prompt
-              // suggestions: ["What can you do?", "Help me with my finances"],
+            });
+          } else {
+            // Fallback if prompt is empty or null
+            await addMessage({
+              conversationId: selectedConversationId,
+              text: "Hello! How can I help you today?", 
+              sender: "system",
             });
           }
         } catch (error) {
           console.error("Failed to get initial prompt:", error);
            await addMessage({
               conversationId: selectedConversationId,
-              text: "Hello! How can I assist you today?",
+              text: "Hello! How can I assist you today?", // Fallback prompt on error
               sender: "system",
             });
         } finally {
@@ -71,7 +92,7 @@ export function ChatView() {
     if (!selectedConversationId || !messageText.trim()) return;
 
     setIsAiResponding(true);
-    const userMessageId = Date.now().toString(); // temp ID for optimistic update
+    const userMessageId = Date.now().toString(); 
     const userMessageForHistory: MessageType = {
       id: userMessageId,
       text: messageText,
@@ -86,8 +107,6 @@ export function ChatView() {
         sender: "user",
       });
       
-      // Construct conversation history for AI
-      // Use the current messages state + the new user message for the most up-to-date history
       const currentMessages = messages ?? [];
       const conversationHistory = currentMessages
         .concat([userMessageForHistory]) 
@@ -103,10 +122,8 @@ export function ChatView() {
         suggestions: aiResponseData.suggestedActions,
       });
       
-      // Decoupled Summarization:
-      // Create a snapshot of messages *after* AI response for summary
       const aiMessageForHistory: MessageType = {
-        id: Date.now().toString() + "_ai", // temp ID
+        id: Date.now().toString() + "_ai", 
         text: aiResponseData.responseText,
         sender: "ai",
         suggestions: aiResponseData.suggestedActions,
@@ -117,10 +134,10 @@ export function ChatView() {
          .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || (msg.suggestions ? msg.suggestions.join(', ') : '')}`)
         .join("\n");
 
-      if (selectedConversationId) { // Ensure ID is still valid
+      if (selectedConversationId) { 
         summarizeConversation({ conversationHistory: historyForSummary })
           .then(summaryData => {
-            if (summaryData?.summary && selectedConversationId) { // Re-check selectedConversationId in case it changed
+            if (summaryData?.summary && selectedConversationId) { 
               updateConversation({ id: selectedConversationId, summary: summaryData.summary, lastMessageText: aiResponseData.responseText.substring(0,100) });
             }
           })
@@ -128,7 +145,6 @@ export function ChatView() {
             console.error("Error summarizing conversation in background:", error);
           });
       }
-
 
     } catch (error) {
       console.error("Error in chat flow:", error);
@@ -138,7 +154,7 @@ export function ChatView() {
         sender: "ai",
       });
     } finally {
-      setIsAiResponding(false); // Unlock input after primary response
+      setIsAiResponding(false); 
     }
   };
 
@@ -146,8 +162,7 @@ export function ChatView() {
     handleSendMessage(suggestionText);
   };
 
-
-  if (!selectedConversationId && !isLoadingMessages) { // Added !isLoadingMessages to prevent flicker if conversations load slowly
+  if (!selectedConversationId && !isLoadingMessages) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
         <MessageCircle className="w-16 h-16 text-muted-foreground mb-4" />
@@ -157,7 +172,7 @@ export function ChatView() {
     );
   }
   
-  if (isLoadingMessages && !messages?.length) { // Show loader only if messages are truly loading for the first time
+  if (isLoadingMessages && (!messages || messages.length === 0)) { 
      return (
         <div className="flex flex-col items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -166,17 +181,23 @@ export function ChatView() {
      );
   }
 
-
   return (
     <div className="flex flex-col h-full bg-background">
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
         {messages && messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} onSuggestionClick={handleSuggestionClick} />
         ))}
-        {isAiResponding && ( 
-           <div className="flex items-start space-x-3 py-3 justify-start pl-10"> {/* Aligned with AI messages */}
-             <Loader2 className="h-5 w-5 animate-spin text-primary mt-1" />
-             <span className="text-sm text-muted-foreground">LUMEN is thinking...</span>
+        {isAiResponding && 
+         (!messages || messages.length === 0 || (messages[messages.length -1]?.sender !== 'ai' && messages[messages.length -1]?.sender !== 'system')) && ( 
+           <div className="flex items-start space-x-3 py-3 justify-start">
+             <Avatar className="h-8 w-8">
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                </AvatarFallback>
+             </Avatar>
+             <div className="bg-card text-card-foreground p-3 rounded-xl shadow-md max-w-[70%]">
+                <p className="text-sm text-muted-foreground">LUMEN is thinking...</p>
+             </div>
            </div>
         )}
       </ScrollArea>
