@@ -51,9 +51,8 @@ export function ChatView() {
     aiResponseAbortControllerRef.current = new AbortController();
     const signal = aiResponseAbortControllerRef.current.signal;
 
-    const userMessageId = Date.now().toString();
-    const userMessageForHistory: MessageType = {
-      id: userMessageId,
+    const userMessageForHistory: MessageType = { // Still create for full history for summarization
+      id: Date.now().toString(),
       text: messageText,
       sender: "user",
       timestamp: new Date(),
@@ -66,17 +65,8 @@ export function ChatView() {
         sender: "user",
       });
 
-      const currentMessages = messages ?? [];
-      const MAX_HISTORY_FOR_PROMPT = 10; 
-      const recentMessagesForPrompt = currentMessages.slice(-MAX_HISTORY_FOR_PROMPT);
-
-      const conversationHistoryForPrompt = recentMessagesForPrompt
-        .concat([userMessageForHistory])
-        .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`)
-        .join("\n");
-
+      // For the AI response, we now send only the current message due to flow simplification
       const aiResponsePromise = generateAiResponse({ 
-        conversationHistory: conversationHistoryForPrompt, 
         currentMessage: messageText 
       });
 
@@ -95,18 +85,22 @@ export function ChatView() {
       } catch (raceError: any) {
         if (raceError.message === 'AI response timeout') {
           console.error("AI response timed out.");
-          await addMessage({
-            conversationId: selectedConversationId,
-            text: "Sorry, I'm taking too long to respond. Please try again.",
-            sender: "ai",
-          });
+          if (selectedConversationId) { // Check if still valid
+            await addMessage({
+              conversationId: selectedConversationId,
+              text: "Sorry, I'm taking too long to respond. Please try again.",
+              sender: "ai",
+            });
+          }
         } else {
            console.error("Error in generateAiResponse race:", raceError);
-           await addMessage({
-            conversationId: selectedConversationId,
-            text: "Sorry, I encountered an error. Please try again.",
-            sender: "ai",
-          });
+           if (selectedConversationId) { // Check if still valid
+             await addMessage({
+              conversationId: selectedConversationId,
+              text: "Sorry, I encountered an error. Please try again.",
+              sender: "ai",
+            });
+           }
         }
         setIsAiResponding(false);
         return;
@@ -115,21 +109,27 @@ export function ChatView() {
 
       if (!aiResponseData || !aiResponseData.responseText) {
         console.warn("Received empty or invalid AI response data:", aiResponseData);
-        await addMessage({
-          conversationId: selectedConversationId,
-          text: "I seem to be having trouble. Could you try again?",
-          sender: "ai",
-        });
+        if (selectedConversationId) { // Check if still valid
+          await addMessage({
+            conversationId: selectedConversationId,
+            text: "I seem to be having trouble. Could you try again?",
+            sender: "ai",
+          });
+        }
         setIsAiResponding(false);
         return;
       }
       
-      await addMessage({
-        conversationId: selectedConversationId,
-        text: aiResponseData.responseText,
-        sender: "ai",
-      });
+      if (selectedConversationId) { // Check if still valid
+        await addMessage({
+          conversationId: selectedConversationId,
+          text: aiResponseData.responseText,
+          sender: "ai",
+        });
+      }
 
+      // Background summarization still uses more complete history
+      const currentMessages = messages ?? []; 
       const aiMessageForSummary: MessageType = {
         id: Date.now().toString() + "_ai",
         text: aiResponseData.responseText,

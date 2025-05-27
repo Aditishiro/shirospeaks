@@ -4,17 +4,13 @@
  * @fileOverview Generates an AI response.
  *
  * - generateAiResponse - A function that handles AI response generation.
- * - GenerateAiResponseInput - The input type for the generateAiResponse function.
- * - GenerateAiResponseOutput - The return type for the generateAiResponse function.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
+// Simplified Input Schema - only currentMessage
 const GenerateAiResponseInputSchema = z.object({
-  conversationHistory: z
-    .string()
-    .describe('The history of the conversation as a single string.'),
   currentMessage: z.string().describe("The user's current message."),
 });
 type GenerateAiResponseInput = z.infer<typeof GenerateAiResponseInputSchema>;
@@ -31,11 +27,11 @@ export async function generateAiResponse(
 ): Promise<GenerateAiResponseOutput> {
   console.log('[generateAiResponse] Flow started. Input currentMessage:', JSON.stringify(input.currentMessage));
   // Log the full input being sent to the prompt for detailed debugging
-  console.log('[generateAiResponse] Full input for prompt:', JSON.stringify(input, null, 2));
+  console.log('[generateAiResponse] Full input for prompt (simplified):', JSON.stringify(input, null, 2));
 
   try {
-    console.log('[generateAiResponse] Calling generateAiResponsePrompt...');
-    const {output} = await generateAiResponsePrompt(input);
+    console.log('[generateAiResponse] Calling simplified prompt...');
+    const {output} = await generateAiResponsePrompt(input); // Pass only simplified input
     console.log('[generateAiResponse] Received raw output from prompt call:', JSON.stringify(output));
 
     if (!output || typeof output.responseText !== 'string' || output.responseText.trim() === "") {
@@ -68,14 +64,10 @@ export async function generateAiResponse(
   }
 }
 
-// Simplified prompt for diagnostics
+// Drastically simplified prompt for diagnostics
 const generateAiResponsePrompt = ai.definePrompt({
   name: 'generateAiResponsePrompt',
-  input: {schema: GenerateAiResponseInputSchema},
+  input: {schema: GenerateAiResponseInputSchema}, // Uses the simplified input schema
   output: {schema: GenerateAiResponseOutputSchema},
-  prompt: `User's message: "{{currentMessage}}"
-Conversation history:
-{{{conversationHistory}}}
-
-Provide a concise textual response.`,
+  prompt: `User said: "{{currentMessage}}". Respond very briefly.`, // Very simple prompt, no history
 });
