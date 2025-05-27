@@ -64,7 +64,7 @@ export function ChatView() {
 
       const conversationHistoryForPrompt = recentMessagesForPrompt
         .concat([userMessageForHistory])
-        .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || (msg.suggestions ? msg.suggestions.join(', ') : '')}`)
+        .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`) // Removed suggestions from history prompt
         .join("\n");
 
       const aiResponseData = await generateAiResponse({ conversationHistory: conversationHistoryForPrompt, currentMessage: messageText });
@@ -73,7 +73,7 @@ export function ChatView() {
         conversationId: selectedConversationId,
         text: aiResponseData.responseText,
         sender: "ai",
-        suggestions: aiResponseData.suggestedActions,
+        // suggestions: aiResponseData.suggestedActions, // Suggestions removed for speed
       });
 
       // For summarization, use the full history available up to this point
@@ -81,7 +81,7 @@ export function ChatView() {
         id: Date.now().toString() + "_ai",
         text: aiResponseData.responseText,
         sender: "ai",
-        suggestions: aiResponseData.suggestedActions,
+        // suggestions: aiResponseData.suggestedActions, // Suggestions removed
         timestamp: new Date(),
       };
       // currentMessages includes all messages fetched so far for the conversation
@@ -89,7 +89,7 @@ export function ChatView() {
       // aiMessageForSummary is the AI response we just received
       const updatedMessagesForSummary = currentMessages.concat([userMessageForHistory, aiMessageForSummary]);
       const fullHistoryForSummary = updatedMessagesForSummary
-         .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || (msg.suggestions ? msg.suggestions.join(', ') : '')}`)
+         .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`) // Removed suggestions from history prompt
         .join("\n");
 
       if (selectedConversationId) {
@@ -117,6 +117,7 @@ export function ChatView() {
   };
 
   const handleSuggestionClick = (suggestionText: string) => {
+    // This function might need to be re-evaluated if suggestions are added back differently
     handleSendMessage(suggestionText);
   };
 
