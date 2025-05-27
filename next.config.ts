@@ -20,6 +20,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Add allowedDevOrigins to permit requests from specific origins during development
+  allowedDevOrigins: ['https://9003-firebase-studio-1748341914825.cluster-sumfw3zmzzhzkx4mpvz3ogth4y.cloudworkstations.dev'],
   webpack: (config, { isServer }) => {
     // Ensure resolve, alias, and fallback objects exist
     config.resolve = config.resolve || {};
