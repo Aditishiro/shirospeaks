@@ -1,3 +1,4 @@
+
 "use client";
 
 import { db } from "@/lib/firebase";
@@ -71,11 +72,11 @@ export function useMessages(conversationId: string | null) {
 
 
   const addMessageMutation = useMutation<
-    string, 
-    Error, 
-    Omit<Message, "id" | "timestamp"> & { conversationId: string }
-  >(
-    async (messageData) => {
+    string, // TData (return type of mutationFn: newMessageRef.id)
+    Error,  // TError
+    Omit<Message, "id" | "timestamp"> & { conversationId: string } // TVariables
+  >({
+    mutationFn: async (messageData) => {
       const { conversationId: targetConversationId, ...restOfMessageData } = messageData;
       if (!targetConversationId || !currentUserId) throw new Error("Conversation ID or User ID is missing");
 
@@ -93,35 +94,30 @@ export function useMessages(conversationId: string | null) {
       });
       queryClient.invalidateQueries({queryKey: ["conversations", currentUserId]});
 
-
       return newMessageRef.id;
     },
-    {
-      onSuccess: (data, variables) => {
-         // Optimistically update or refetch, onSnapshot handles this too.
-         // queryClient.invalidateQueries({ queryKey: ["messages", variables.conversationId] });
-      },
-    }
-  );
+    onSuccess: (data, variables) => {
+       // Optimistically update or refetch, onSnapshot handles this too.
+       // queryClient.invalidateQueries({ queryKey: ["messages", variables.conversationId] });
+    },
+  });
 
   const updateMessageFeedbackMutation = useMutation<
-    void, 
-    Error, 
-    { messageId: string; feedback: "up" | "down" | null; conversationId: string }
-  >(
-    async ({ messageId, feedback, conversationId: targetConversationId }) => {
+    void, // TData
+    Error, // TError
+    { messageId: string; feedback: "up" | "down" | null; conversationId: string } // TVariables
+  >({
+    mutationFn: async ({ messageId, feedback, conversationId: targetConversationId }) => {
       if (!targetConversationId || !currentUserId) throw new Error("Conversation ID or User ID is missing");
 
       const messagePath = `${CONVERSATIONS_COLLECTION}/${targetConversationId}/${MESSAGES_COLLECTION}/${messageId}`;
       const messageRef = doc(db, messagePath);
       await updateDoc(messageRef, { feedback });
     },
-    {
-      onSuccess: (data, variables) => {
-        // queryClient.invalidateQueries({ queryKey: ["messages", variables.conversationId] });
-      },
-    }
-  );
+    onSuccess: (data, variables) => {
+      // queryClient.invalidateQueries({ queryKey: ["messages", variables.conversationId] });
+    },
+  });
 
   return {
     messages: messagesQuery.data,

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { db } from "@/lib/firebase";
@@ -40,8 +41,12 @@ export function useConversations() {
     enabled: !!currentUserId,
   });
 
-  const createConversationMutation = useMutation<string, Error, { initialMessage?: string }>(
-    async ({ initialMessage }) => {
+  const createConversationMutation = useMutation<
+    string, // TData (return type of mutationFn)
+    Error,  // TError
+    { initialMessage?: string } // TVariables
+  >({
+    mutationFn: async ({ initialMessage }) => {
       if (!currentUserId) throw new Error("User not authenticated");
       const newConversationRef = await addDoc(collection(db, CONVERSATIONS_COLLECTION), {
         userId: currentUserId,
@@ -52,15 +57,17 @@ export function useConversations() {
       });
       return newConversationRef.id;
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries({queryKey: ["conversations", currentUserId]});
-      },
-    }
-  );
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ["conversations", currentUserId]});
+    },
+  });
 
-  const updateConversationMutation = useMutation<void, Error, Partial<Conversation> & { id: string }>(
-    async (conversationData) => {
+  const updateConversationMutation = useMutation<
+    void, // TData
+    Error, // TError
+    Partial<Conversation> & { id: string } // TVariables
+  >({
+    mutationFn: async (conversationData) => {
       if (!currentUserId) throw new Error("User not authenticated");
       const { id, ...dataToUpdate } = conversationData;
       const conversationRef = doc(db, CONVERSATIONS_COLLECTION, id);
@@ -69,27 +76,27 @@ export function useConversations() {
         updatedAt: serverTimestamp(),
       });
     },
-    {
-      onSuccess: (_, variables) => {
-        queryClient.invalidateQueries({queryKey: ["conversations", currentUserId]});
-        queryClient.invalidateQueries({queryKey: ["conversation", variables.id]});
-      },
-    }
-  );
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({queryKey: ["conversations", currentUserId]});
+      queryClient.invalidateQueries({queryKey: ["conversation", variables.id]});
+    },
+  });
   
-  const deleteConversationMutation = useMutation<void, Error, string>(
-    async (conversationId) => {
+  const deleteConversationMutation = useMutation<
+    void,   // TData
+    Error,  // TError
+    string  // TVariables (conversationId)
+  >({
+    mutationFn: async (conversationId) => {
       // Note: This does not delete subcollections (messages). 
       // For a production app, use a Firebase Function to delete subcollections.
       const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
       await deleteDoc(conversationRef);
     },
-    {
-      onSuccess: () => {
-        queryClient.invalidateQueries({queryKey: ["conversations", currentUserId]});
-      },
-    }
-  );
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ["conversations", currentUserId]});
+    },
+  });
 
 
   return {
