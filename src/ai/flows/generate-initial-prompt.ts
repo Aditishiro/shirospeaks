@@ -1,3 +1,7 @@
+import {genkit} from 'genkit';
+import {googleAI} from '@genkit-ai/googleai';
 
-// This file is no longer needed as the AI will not initiate chats.
-// Please delete this file.
+export const ai = genkit({
+  plugins: [googleAI({apiKey: process.env.GOOGLE_GENAI_API_KEY})],
+  model: 'googleai/gemini-1.5-flash-latest', // Updated to a newer, generally faster model
+});
