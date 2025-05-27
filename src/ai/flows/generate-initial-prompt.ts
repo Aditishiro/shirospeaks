@@ -3,21 +3,20 @@
 /**
  * @fileOverview Generates an initial prompt for new users to understand LUMEN's capabilities.
  *
- * - generateInitialPrompt - A function that generates the initial prompt.
- * - GenerateInitialPromptInput - The input type for the generateInitialPrompt function (void).
- * - GenerateInitialPromptOutput - The return type for the generateInitialPrompt function.
+ * Exports:
+ * - generateInitialPrompt: A function that generates the initial prompt.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const GenerateInitialPromptInputSchema = z.void();
-export type GenerateInitialPromptInput = z.infer<typeof GenerateInitialPromptInputSchema>;
+type GenerateInitialPromptInput = z.infer<typeof GenerateInitialPromptInputSchema>;
 
 const GenerateInitialPromptOutputSchema = z.object({
   prompt: z.string().describe('A helpful starting prompt for new users.'),
 });
-export type GenerateInitialPromptOutput = z.infer<typeof GenerateInitialPromptOutputSchema>;
+type GenerateInitialPromptOutput = z.infer<typeof GenerateInitialPromptOutputSchema>;
 
 export async function generateInitialPrompt(): Promise<GenerateInitialPromptOutput> {
   return generateInitialPromptFlow();

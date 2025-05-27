@@ -1,11 +1,10 @@
-// use server'
+'use server';
 
 /**
  * @fileOverview Suggests relevant follow-up actions based on the current conversation.
  *
- * - suggestFollowUpActions - A function that suggests follow-up actions.
- * - SuggestFollowUpActionsInput - The input type for the suggestFollowUpActions function.
- * - SuggestFollowUpActionsOutput - The return type for the suggestFollowUpActions function.
+ * Exports:
+ * - suggestFollowUpActions: A function that suggests follow-up actions.
  */
 
 import {ai} from '@/ai/genkit';
@@ -16,7 +15,7 @@ const SuggestFollowUpActionsInputSchema = z.object({
     .string()
     .describe('The history of the conversation as a single string.'),
 });
-export type SuggestFollowUpActionsInput = z.infer<
+type SuggestFollowUpActionsInput = z.infer<
   typeof SuggestFollowUpActionsInputSchema
 >;
 
@@ -25,7 +24,7 @@ const SuggestFollowUpActionsOutputSchema = z.object({
     .array(z.string())
     .describe('An array of suggested follow-up actions.'),
 });
-export type SuggestFollowUpActionsOutput = z.infer<
+type SuggestFollowUpActionsOutput = z.infer<
   typeof SuggestFollowUpActionsOutputSchema
 >;
 

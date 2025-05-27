@@ -1,11 +1,9 @@
-// Summarize-conversation.ts
 'use server';
 /**
  * @fileOverview Summarizes a conversation.
  *
- * - summarizeConversation - A function that summarizes a conversation.
- * - SummarizeConversationInput - The input type for the summarizeConversation function.
- * - SummarizeConversationOutput - The return type for the summarizeConversation function.
+ * Exports:
+ * - summarizeConversation: A function that summarizes a conversation.
  */
 
 import {ai} from '@/ai/genkit';
@@ -16,14 +14,14 @@ const SummarizeConversationInputSchema = z.object({
     .string()
     .describe('The complete history of the conversation to summarize.'),
 });
-export type SummarizeConversationInput = z.infer<
+type SummarizeConversationInput = z.infer<
   typeof SummarizeConversationInputSchema
 >;
 
 const SummarizeConversationOutputSchema = z.object({
   summary: z.string().describe('A concise summary of the conversation.'),
 });
-export type SummarizeConversationOutput = z.infer<
+type SummarizeConversationOutput = z.infer<
   typeof SummarizeConversationOutputSchema
 >;
 
