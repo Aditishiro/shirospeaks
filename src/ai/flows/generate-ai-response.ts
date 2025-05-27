@@ -22,35 +22,48 @@ const GenerateAiResponseOutputSchema = z.object({
 });
 export type GenerateAiResponseOutput = z.infer<typeof GenerateAiResponseOutputSchema>;
 
-// Define the prompt with minimal configuration
-// No explicit input/output schema for the prompt itself to simplify Genkit interaction.
-// Genkit will pass the input object to the handlebars template, 
-// and we'll extract text from the GenerateResult.
-const generateAiResponsePrompt = ai.definePrompt({
-  name: 'generateAiResponsePrompt',
-  prompt: `User message: "{{currentMessage}}". Respond briefly and directly.`,
-});
-
 export async function generateAiResponse(
   input: GenerateAiResponseInput
 ): Promise<GenerateAiResponseOutput> {
   console.log('[generateAiResponse] Flow started. Input:', JSON.stringify(input));
 
-  try {
-    console.log('[generateAiResponse] Calling simplified prompt...');
-    
-    // Call the prompt with the input object.
-    // Genkit's definePrompt (without input/output schema) returns a function that
-    // takes an object and returns Promise<GenerateResult>.
-    const result: GenerateResult = await generateAiResponsePrompt(input);
-    const responseText = result.text;
+  if (!process.env.GOOGLE_GENAI_API_KEY) {
+    console.error('[generateAiResponse] CRITICAL: GOOGLE_GENAI_API_KEY is not set in the environment for the flow.');
+    return {
+        responseText: "Server configuration error: AI service API key is missing.",
+    };
+  }
 
-    console.log('[generateAiResponse] Prompt call completed. Response text:', responseText);
+  try {
+    console.log(`[generateAiResponse] Attempting to generate response for: "${input.currentMessage}"`);
+
+    // Directly use ai.generate()
+    const result = await ai.generate({
+      prompt: `User message: "${input.currentMessage}". Respond briefly and directly.`,
+      // Model is taken from the default configured in ai instance (src/ai/genkit.ts)
+      // No explicit output schema here, we'll extract text from GenerateResult
+    });
+
+    const responseText = result.text; // Access the text property (Genkit v1.x)
+
+    console.log('[generateAiResponse] AI call completed. Raw result object:', JSON.stringify(result, null, 2));
+    console.log('[generateAiResponse] Response text extracted:', responseText);
 
     if (typeof responseText !== 'string' || responseText.trim() === "") {
-      console.warn("[generateAiResponse] AI response text was empty or not a string. Raw result:", JSON.stringify(result));
+      console.warn("[generateAiResponse] AI response text was empty or not a string. Raw result was:", JSON.stringify(result));
+      // Attempt to get any diagnostic information from the result if text is empty
+      let diagnostics = "";
+      if (result?.candidates?.[0]?.finishReason) {
+        diagnostics += ` Finish Reason: ${result.candidates[0].finishReason}.`;
+      }
+      if (result?.candidates?.[0]?.finishMessage) {
+        diagnostics += ` Finish Message: ${result.candidates[0].finishMessage}.`;
+      }
+      if (result?.usage) {
+        diagnostics += ` Usage: ${JSON.stringify(result.usage)}.`;
+      }
       return {
-        responseText: "I received an unusual response format. Could you try rephrasing?",
+        responseText: `I received an unusual response from the AI. Please try rephrasing. ${diagnostics ? `(Diagnostics: ${diagnostics.trim()})` : ""}`,
       };
     }
     
@@ -58,38 +71,57 @@ export async function generateAiResponse(
     return { responseText };
 
   } catch (error: any) {
-    console.error("[generateAiResponse] Error during prompt execution or processing. Name:", error.name, "Message:", error.message);
+    console.error("[generateAiResponse] Error during ai.generate() call or processing. Name:", error.name, "Message:", error.message);
     if (error.stack) {
       console.error("[generateAiResponse] Error stack:", error.stack);
     }
-    let errorDetails = "Could not stringify error.";
+    
+    let errorDetails = "Could not stringify error object.";
     try {
-      errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-      console.error("[generateAiResponse] Stringified error details:", errorDetails);
+        // Attempt to serialize more parts of the error object if it's complex
+        const errorProps = Object.getOwnPropertyNames(error);
+        const customErrorDetails: Record<string, any> = { message: error.message, name: error.name };
+        errorProps.forEach(prop => {
+            if (prop !== 'stack' && prop !== 'message' && prop !== 'name') {
+                customErrorDetails[prop] = error[prop];
+            }
+        });
+        errorDetails = JSON.stringify(customErrorDetails, null, 2);
+        console.error("[generateAiResponse] Stringified error details:", errorDetails);
     } catch (e) {
-      console.error("[generateAiResponse] Could not stringify the full error object for logging. Message:", error.message);
+        console.error("[generateAiResponse] Could not stringify the full error object for logging. Basic message:", error.message);
     }
     
-    // Check for specific Genkit/Google AI error patterns if possible
-    if (error.message && error.message.includes('API key not valid')) {
+    // Check for common API key / permission / quota errors (patterns might vary by provider)
+    if (error.message && (error.message.includes('API key not valid') || error.message.includes('Invalid API key'))) {
         return {
             responseText: "There seems to be an issue with the AI service configuration (API key). Please contact support.",
         };
     }
-     if (error.message && error.message.includes('permission')) {
+    if (error.message && (error.message.includes('permission denied') || error.message.includes('PermissionDenied'))) {
         return {
-            responseText: "There seems to be a permission issue with the AI service. Please contact support.",
+            responseText: "There seems to be a permission issue with the AI service. Please check API key permissions and ensure the Gemini API is enabled for your project. Contact support if issues persist.",
         };
     }
-    if (error.message && error.message.includes('Quota')) {
+    if (error.message && (error.message.includes('Quota') || error.message.includes('quota exceeded'))) {
         return {
-            responseText: "The AI service quota has been exceeded. Please try again later.",
+            responseText: "The AI service quota has been exceeded. Please try again later or check your quota limits.",
+        };
+    }
+    if (error.message && error.message.includes('Billing account')) {
+        return {
+            responseText: "There might be an issue with the billing account associated with the AI service. Please verify your project's billing status.",
+        };
+    }
+     if (error.message && error.message.includes('model is not supported')) {
+        return {
+            responseText: "The configured AI model may not be supported or available. Please check the model name.",
         };
     }
 
 
     return {
-      responseText: "I encountered an unexpected server issue processing your request. Please try again in a moment.",
+      responseText: "I encountered an unexpected server issue processing your request. Please check server logs for details and try again in a moment.",
     };
   }
 }
