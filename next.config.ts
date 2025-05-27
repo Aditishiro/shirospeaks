@@ -21,17 +21,22 @@ const nextConfig: NextConfig = {
     ],
   },
   webpack: (config, { isServer }) => {
-    // Ensure resolve and alias objects exist
+    // Ensure resolve, alias, and fallback objects exist
     config.resolve = config.resolve || {};
     config.resolve.alias = config.resolve.alias || {};
+    config.resolve.fallback = config.resolve.fallback || {};
 
     // For client-side bundles, prevent errors when Node.js-specific modules are imported.
     if (!isServer) {
       const shimPath = path.resolve(__dirname, 'src/lib/empty-async-hooks-shim.ts');
-      // Alias 'async_hooks' to an empty shim file for client-side bundles.
-      config.resolve.alias.async_hooks = shimPath;
-      // Alias the problematic OpenTelemetry module to the same empty shim.
+      
+      // Use fallback for Node.js core modules like 'async_hooks'
+      config.resolve.fallback.async_hooks = shimPath; 
+      
+      // Alias problematic OpenTelemetry modules to the same empty shim.
+      // This attempts to prevent these server-side modules from being bundled entirely on the client.
       config.resolve.alias['@opentelemetry/context-async-hooks'] = shimPath;
+      config.resolve.alias['@opentelemetry/sdk-trace-node'] = shimPath;
     }
 
     // Important: return the modified config
