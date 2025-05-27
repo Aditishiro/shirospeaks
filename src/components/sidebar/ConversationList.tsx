@@ -1,5 +1,7 @@
+
 "use client";
 
+import { useState } from "react"; // Import useState directly
 import { useConversations } from "@/hooks/useConversations";
 import { useAppContext } from "@/contexts/AppContext";
 import { ConversationItem } from "./ConversationItem";
@@ -12,12 +14,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function ConversationList() {
   const { conversations, isLoadingConversations, createConversation } = useConversations();
   const { setSelectedConversationId, selectedConversationId } = useAppContext();
-  const [isCreating, setIsCreating] = React.useState(false);
+  const [isCreating, setIsCreating] = useState(false); // Use useState directly
 
   const handleNewConversation = async () => {
     setIsCreating(true);
     try {
-      const newConversationId = await createConversation({});
+      const newConversationId = await createConversation({ initialMessage: "" }); // Pass empty string for new convo
       setSelectedConversationId(newConversationId);
     } catch (error) {
       console.error("Failed to create new conversation:", error);
