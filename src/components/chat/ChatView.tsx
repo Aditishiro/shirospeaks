@@ -14,7 +14,7 @@ import { useConversations } from "@/hooks/useConversations";
 import type { Message as MessageType } from "@/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const AI_RESPONSE_TIMEOUT_MS = 30000; // 30 seconds
+const AI_RESPONSE_TIMEOUT_MS = 30000; // 30 seconds client-side timeout
 
 export function ChatView() {
   const {
@@ -42,16 +42,16 @@ export function ChatView() {
   }, [messages, scrollToBottom]);
 
   const handleSendMessage = async (messageText: string) => {
-    if (!selectedConversationId || !messageText.trim()) return;
+    if (!selectedConversationId || !messageText.trim() || isAiResponding) return;
 
     setIsAiResponding(true);
     if (aiResponseAbortControllerRef.current) {
-      aiResponseAbortControllerRef.current.abort(); // Abort previous request if any
+      aiResponseAbortControllerRef.current.abort(); 
     }
     aiResponseAbortControllerRef.current = new AbortController();
     const signal = aiResponseAbortControllerRef.current.signal;
 
-    const userMessageForHistory: MessageType = { // Still create for full history for summarization
+    const userMessageForHistory: MessageType = { 
       id: Date.now().toString(),
       text: messageText,
       sender: "user",
@@ -65,106 +65,119 @@ export function ChatView() {
         sender: "user",
       });
 
-      // For the AI response, we now send only the current message due to flow simplification
       const aiResponsePromise = generateAiResponse({ 
         currentMessage: messageText 
       });
 
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('AI response timeout')), AI_RESPONSE_TIMEOUT_MS)
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => {
+          console.warn('[ChatView] Client-side AI response timeout triggered.');
+          reject(new Error('AI_RESPONSE_CLIENT_TIMEOUT'));
+        }, AI_RESPONSE_TIMEOUT_MS)
       );
       
       let aiResponseData;
       try {
+        console.log('[ChatView] Waiting for AI response or client timeout...');
         // @ts-ignore
         aiResponseData = await Promise.race([aiResponsePromise, timeoutPromise]);
-         if (signal.aborted) {
-          console.log("AI response aborted by new message send");
-          return; // Don't process if aborted
+        
+        if (signal.aborted) {
+          console.log("[ChatView] AI response aborted by new message send or component unmount.");
+          // No setIsAiResponding(false) here, finally block handles it if this was the active request
+          return; 
         }
+        console.log('[ChatView] Promise.race settled. AI Response Data:', aiResponseData);
+
       } catch (raceError: any) {
-        if (raceError.message === 'AI response timeout') {
-          console.error("AI response timed out.");
-          if (selectedConversationId) { // Check if still valid
-            await addMessage({
-              conversationId: selectedConversationId,
-              text: "Sorry, I'm taking too long to respond. Please try again.",
-              sender: "ai",
-            });
-          }
-        } else {
-           console.error("Error in generateAiResponse race:", raceError);
-           if (selectedConversationId) { // Check if still valid
-             await addMessage({
-              conversationId: selectedConversationId,
-              text: "Sorry, I encountered an error. Please try again.",
-              sender: "ai",
-            });
-           }
+        console.error("[ChatView] Error in Promise.race or AI flow call:", raceError.message, raceError.name);
+        let fallbackMessage = "Sorry, I encountered an error. Please try again.";
+        if (raceError.message === 'AI_RESPONSE_CLIENT_TIMEOUT') {
+          fallbackMessage = "Sorry, I'm taking too long to respond. Please try asking again.";
         }
-        setIsAiResponding(false);
-        return;
+        
+        if (selectedConversationId && !signal.aborted) {
+            await addMessage({
+                conversationId: selectedConversationId,
+                text: fallbackMessage,
+                sender: "ai",
+            });
+        }
+        // No setIsAiResponding(false) here, finally block handles it
+        return; // Important to return to allow finally to execute
       }
 
 
       if (!aiResponseData || !aiResponseData.responseText) {
-        console.warn("Received empty or invalid AI response data:", aiResponseData);
-        if (selectedConversationId) { // Check if still valid
+        console.warn("[ChatView] Received empty or invalid AI response data:", aiResponseData);
+        if (selectedConversationId && !signal.aborted) { 
           await addMessage({
             conversationId: selectedConversationId,
-            text: "I seem to be having trouble. Could you try again?",
+            text: "I seem to be having trouble formulating a response. Could you try again?",
             sender: "ai",
           });
         }
-        setIsAiResponding(false);
+        // No setIsAiResponding(false) here, finally block handles it
         return;
       }
       
-      if (selectedConversationId) { // Check if still valid
+      if (selectedConversationId && !signal.aborted) { 
         await addMessage({
           conversationId: selectedConversationId,
           text: aiResponseData.responseText,
           sender: "ai",
         });
-      }
 
-      // Background summarization still uses more complete history
-      const currentMessages = messages ?? []; 
-      const aiMessageForSummary: MessageType = {
-        id: Date.now().toString() + "_ai",
-        text: aiResponseData.responseText,
-        sender: "ai",
-        timestamp: new Date(),
-      };
-      const updatedMessagesForSummary = currentMessages.concat([userMessageForHistory, aiMessageForSummary]);
-      const fullHistoryForSummary = updatedMessagesForSummary
-         .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`)
-        .join("\n");
+        // Background summarization
+        const currentMessages = messages ?? []; 
+        const aiMessageForSummary: MessageType = {
+          id: Date.now().toString() + "_ai_summary_ref",
+          text: aiResponseData.responseText,
+          sender: "ai",
+          timestamp: new Date(),
+        };
+        const updatedMessagesForSummary = [...currentMessages, userMessageForHistory, aiMessageForSummary];
+        
+        const fullHistoryForSummary = updatedMessagesForSummary
+          .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`)
+          .join("\n");
 
-      if (selectedConversationId) {
+        console.log('[ChatView] Triggering background summarization...');
         summarizeConversation({ conversationHistory: fullHistoryForSummary })
           .then(summaryData => {
-            if (summaryData?.summary && selectedConversationId) {
+            if (summaryData?.summary && selectedConversationId) { // Check selectedConversationId again
+              console.log('[ChatView] Background summarization successful. Updating conversation summary.');
               updateConversation({ id: selectedConversationId, summary: summaryData.summary, lastMessageText: aiResponseData.responseText.substring(0,100) });
+            } else {
+              console.warn('[ChatView] Background summarization did not return a valid summary.');
             }
           })
           .catch(error => {
-            console.error("Error summarizing conversation in background:", error);
+            console.error("[ChatView] Error summarizing conversation in background:", error);
           });
       }
 
     } catch (error) {
-      console.error("Error in chat flow:", error);
-      if (selectedConversationId) { // Ensure selectedConversationId is still valid
+      console.error("[ChatView] Outer error in handleSendMessage:", error);
+      if (selectedConversationId && !signal.aborted) { 
          await addMessage({
             conversationId: selectedConversationId,
-            text: "Sorry, I encountered an error. Please try again.",
+            text: "Sorry, an unexpected error occurred. Please try again.",
             sender: "ai",
           });
       }
     } finally {
-      setIsAiResponding(false);
-      aiResponseAbortControllerRef.current = null;
+      console.log('[ChatView] handleSendMessage finally block. Aborted state:', signal.aborted);
+      // Only reset loading if this was the active request that wasn't aborted.
+      // If a new message was sent, a new controller is active, and this finally block
+      // is for the older, aborted request.
+      if (aiResponseAbortControllerRef.current === signal.source) { // Check if this is still the active controller
+         setIsAiResponding(false);
+         aiResponseAbortControllerRef.current = null;
+         console.log('[ChatView] Reset isAiResponding to false and cleared abort controller.');
+      } else {
+         console.log('[ChatView] Not resetting isAiResponding; a newer request is active or this one was aborted.');
+      }
     }
   };
 

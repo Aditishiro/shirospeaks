@@ -6,96 +6,90 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z, type GenerateResult} from 'genkit';
+import {GenerateResult, z} from 'genkit';
 
-// Simplified Input Schema - only currentMessage
+// Input schema for the exported flow function (client-facing)
 const GenerateAiResponseInputSchema = z.object({
   currentMessage: z.string().describe("The user's current message."),
 });
-type GenerateAiResponseInput = z.infer<typeof GenerateAiResponseInputSchema>;
+export type GenerateAiResponseInput = z.infer<typeof GenerateAiResponseInputSchema>;
 
+// Output schema for the exported flow function (client-facing)
 const GenerateAiResponseOutputSchema = z.object({
   responseText: z
     .string()
     .describe("The AI's textual and conversational response to the current message."),
 });
-type GenerateAiResponseOutput = z.infer<typeof GenerateAiResponseOutputSchema>;
+export type GenerateAiResponseOutput = z.infer<typeof GenerateAiResponseOutputSchema>;
 
-const AI_PROMPT_SERVER_TIMEOUT_MS = 25000; // 25 seconds server-side timeout for the prompt call
+// Define the prompt with minimal configuration
+// No explicit input/output schema for the prompt itself to simplify Genkit interaction.
+// Genkit will pass the input object to the handlebars template, 
+// and we'll extract text from the GenerateResult.
+const generateAiResponsePrompt = ai.definePrompt({
+  name: 'generateAiResponsePrompt',
+  prompt: `User message: "{{currentMessage}}". Respond briefly and directly.`,
+});
 
 export async function generateAiResponse(
   input: GenerateAiResponseInput
 ): Promise<GenerateAiResponseOutput> {
-  console.log('[generateAiResponse] Flow started. Input currentMessage:', JSON.stringify(input.currentMessage));
-  // Log the full input being sent to the prompt for detailed debugging
-  console.log('[generateAiResponse] Full input for prompt (simplified):', JSON.stringify(input, null, 2));
+  console.log('[generateAiResponse] Flow started. Input:', JSON.stringify(input));
 
   try {
-    console.log(`[generateAiResponse] Preparing to call simplified prompt with a ${AI_PROMPT_SERVER_TIMEOUT_MS / 1000}s server-side timeout...`);
+    console.log('[generateAiResponse] Calling simplified prompt...');
     
-    const promptTask = generateAiResponsePrompt(input);
-    
-    const timeoutTask = new Promise<never>((_, reject) => // This promise will always reject if the timeout is hit
-      setTimeout(() => {
-        console.warn('[generateAiResponse] Server-side timeout triggered for AI prompt call.');
-        reject(new Error('SERVER_PROMPT_TIMEOUT'));
-      }, AI_PROMPT_SERVER_TIMEOUT_MS)
-    );
+    // Call the prompt with the input object.
+    // Genkit's definePrompt (without input/output schema) returns a function that
+    // takes an object and returns Promise<GenerateResult>.
+    const result: GenerateResult = await generateAiResponsePrompt(input);
+    const responseText = result.text;
 
-    // Race the prompt call against the timeout
-    // @ts-ignore Genkit's prompt function return type can be complex to align perfectly with Promise.race here
-    const resultFromRace = await Promise.race([promptTask, timeoutTask]);
-    
-    // If promptTask resolved, resultFromRace is its result.
-    // If timeoutTask rejected, the catch block below will be executed.
-    // @ts-ignore
-    const output = resultFromRace.output; // Accessing the structured output
-    
-    console.log('[generateAiResponse] Prompt call completed successfully (did not time out on server).');
-    console.log('[generateAiResponse] Received raw output from prompt call:', JSON.stringify(output));
+    console.log('[generateAiResponse] Prompt call completed. Response text:', responseText);
 
-    if (!output || typeof output.responseText !== 'string' || output.responseText.trim() === "") {
-      console.warn("[generateAiResponse] AI response was empty, invalid, or not a string after successful call. Output was:", JSON.stringify(output), "Returning fallback.");
+    if (typeof responseText !== 'string' || responseText.trim() === "") {
+      console.warn("[generateAiResponse] AI response text was empty or not a string. Raw result:", JSON.stringify(result));
       return {
-        responseText: "I seem to be having trouble formulating a full response. Could you try rephrasing or asking something different?",
+        responseText: "I received an unusual response format. Could you try rephrasing?",
       };
     }
-    console.log("[generateAiResponse] Successfully processed response:", output.responseText);
-    return output;
+    
+    console.log("[generateAiResponse] Successfully processed response:", responseText);
+    return { responseText };
 
   } catch (error: any) {
-    console.error("[generateAiResponse] Error in flow's main try/catch. Full error object name:", error.name, "message:", error.message);
-    
-    if (error.message === 'SERVER_PROMPT_TIMEOUT') {
-      // This case is specifically for our server-side timeout
-      return {
-        responseText: "Sorry, the AI took too long to respond from the server. Please try again.",
-      };
-    }
-    
-    // Log other specific error properties if they exist
+    console.error("[generateAiResponse] Error during prompt execution or processing. Name:", error.name, "Message:", error.message);
     if (error.stack) {
       console.error("[generateAiResponse] Error stack:", error.stack);
     }
+    let errorDetails = "Could not stringify error.";
     try {
-      // Attempt to stringify the error for more details, handling potential circular references
-      const errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+      errorDetails = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
       console.error("[generateAiResponse] Stringified error details:", errorDetails);
     } catch (e) {
-      console.error("[generateAiResponse] Could not stringify the full error object. Message:", error.message);
+      console.error("[generateAiResponse] Could not stringify the full error object for logging. Message:", error.message);
     }
     
-    // Generic fallback for other errors
+    // Check for specific Genkit/Google AI error patterns if possible
+    if (error.message && error.message.includes('API key not valid')) {
+        return {
+            responseText: "There seems to be an issue with the AI service configuration (API key). Please contact support.",
+        };
+    }
+     if (error.message && error.message.includes('permission')) {
+        return {
+            responseText: "There seems to be a permission issue with the AI service. Please contact support.",
+        };
+    }
+    if (error.message && error.message.includes('Quota')) {
+        return {
+            responseText: "The AI service quota has been exceeded. Please try again later.",
+        };
+    }
+
+
     return {
-      responseText: "I encountered an unexpected issue processing your request on the server. Please try again in a moment.",
+      responseText: "I encountered an unexpected server issue processing your request. Please try again in a moment.",
     };
   }
 }
-
-// Drastically simplified prompt for diagnostics
-const generateAiResponsePrompt = ai.definePrompt({
-  name: 'generateAiResponsePrompt',
-  input: {schema: GenerateAiResponseInputSchema}, // Uses the simplified input schema
-  output: {schema: GenerateAiResponseOutputSchema},
-  prompt: `User said: "{{currentMessage}}". Respond very briefly.`, // Very simple prompt, no history
-});
