@@ -4,6 +4,8 @@
  * @fileOverview Generates an AI response.
  *
  * - generateAiResponse - A function that handles AI response generation.
+ * - GenerateAiResponseInput - The input type for the generateAiResponse function.
+ * - GenerateAiResponseOutput - The return type for the generateAiResponse function.
  */
 
 import {ai} from '@/ai/genkit';
@@ -27,44 +29,44 @@ type GenerateAiResponseOutput = z.infer<typeof GenerateAiResponseOutputSchema>;
 export async function generateAiResponse(
   input: GenerateAiResponseInput
 ): Promise<GenerateAiResponseOutput> {
-  return generateAiResponseFlow(input);
-}
+  console.log('[generateAiResponse] Flow started with input:', JSON.stringify(input.currentMessage)); // Log only current message for brevity
+  try {
+    console.log('[generateAiResponse] Calling generateAiResponsePrompt...');
+    const {output} = await generateAiResponsePrompt(input);
+    console.log('[generateAiResponse] Received output from prompt:', JSON.stringify(output));
 
-// New prompt definition that asks for plain text output
-const plainTextPrompt = ai.definePrompt({
-  name: 'generateAiResponsePlainTextPrompt',
-  input: {schema: GenerateAiResponseInputSchema},
-  // No output schema here, model will return plain text.
-  prompt: `You are LUMEN, an AI assistant for a neobank.
-The user's latest message is: "{{currentMessage}}"
-
-Consider the following conversation history:
-{{{conversationHistory}}}
-
-Your task is to generate a direct, helpful, and conversational textual response to the user's current message. This response should directly address their query or statement.
-ONLY provide the textual response. Do not include any other information or formatting.
-`,
-});
-
-const generateAiResponseFlow = ai.defineFlow(
-  {
-    name: 'generateAiResponseFlow',
-    inputSchema: GenerateAiResponseInputSchema,
-    outputSchema: GenerateAiResponseOutputSchema, // The flow still adheres to this output schema
-  },
-  async input => {
-    // Call the plain text prompt
-    const llmResponse = await plainTextPrompt(input);
-    const textOutput = llmResponse.text;
-
-    if (!textOutput || textOutput.trim() === "") {
-      // Fallback in case the LLM fails to generate a valid textual response
+    if (!output || !output.responseText || output.responseText.trim() === "") {
+      console.warn("[generateAiResponse] AI response was empty or invalid, returning fallback.");
       return {
-        responseText: "I'm sorry, I had trouble formulating a response. Could you try rephrasing?",
+        responseText: "I seem to be having trouble formulating a full response. Could you try rephrasing?",
       };
     }
-    // Manually construct the expected output object
-    return { responseText: textOutput };
+    console.log("[generateAiResponse] Successfully processed response.");
+    return output;
+  } catch (error) {
+    console.error("[generateAiResponse] Error in flow:", error);
+    return {
+      responseText: "I encountered an unexpected issue. Please try again in a moment.",
+    };
   }
-);
+}
+
+// Prompt definition that asks for structured output adhering to GenerateAiResponseOutputSchema
+const generateAiResponsePrompt = ai.definePrompt({
+  name: 'generateAiResponsePrompt',
+  input: {schema: GenerateAiResponseInputSchema},
+  output: {schema: GenerateAiResponseOutputSchema},
+  // TEMPORARILY SIMPLIFIED PROMPT FOR DEBUGGING:
+  prompt: `You are LUMEN, an AI assistant. Respond to: "{{currentMessage}}". Your response should be a JSON object with a single key "responseText" containing your textual reply.`,
+  // ORIGINAL PROMPT (commented out for now):
+  // prompt: `You are LUMEN, an AI assistant for a neobank.
+// The user's latest message is: "{{currentMessage}}"
+
+// Consider the following conversation history:
+// {{{conversationHistory}}}
+
+// Your task is to generate a direct, helpful, and conversational textual response to the user's current message.
+// Ensure your response strictly follows the output schema, providing only the 'responseText' field.
+// `,
+});
 
