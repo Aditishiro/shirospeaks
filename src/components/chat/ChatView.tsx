@@ -7,7 +7,7 @@ import { useMessages } from "@/hooks/useMessages";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, MessageCircle, Bot } from "lucide-react"; 
+import { Loader2, MessageCircle, Bot } from "lucide-react";
 import { generateAiResponse } from "@/ai/flows/generate-ai-response";
 import { summarizeConversation } from "@/ai/flows/summarize-conversation";
 import { useConversations } from "@/hooks/useConversations";
@@ -43,7 +43,7 @@ export function ChatView() {
     if (!selectedConversationId || !messageText.trim()) return;
 
     setIsAiResponding(true);
-    const userMessageId = Date.now().toString(); 
+    const userMessageId = Date.now().toString();
     const userMessageForHistory: MessageType = {
       id: userMessageId,
       text: messageText,
@@ -57,38 +57,45 @@ export function ChatView() {
         text: messageText,
         sender: "user",
       });
-      
+
       const currentMessages = messages ?? [];
-      const conversationHistory = currentMessages
-        .concat([userMessageForHistory]) 
+      const MAX_HISTORY_FOR_PROMPT = 10; // Limit to last 10 messages for prompt context
+      const recentMessagesForPrompt = currentMessages.slice(-MAX_HISTORY_FOR_PROMPT);
+
+      const conversationHistoryForPrompt = recentMessagesForPrompt
+        .concat([userMessageForHistory])
         .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || (msg.suggestions ? msg.suggestions.join(', ') : '')}`)
         .join("\n");
-      
-      const aiResponseData = await generateAiResponse({ conversationHistory, currentMessage: messageText });
-      
+
+      const aiResponseData = await generateAiResponse({ conversationHistory: conversationHistoryForPrompt, currentMessage: messageText });
+
       await addMessage({
         conversationId: selectedConversationId,
         text: aiResponseData.responseText,
         sender: "ai",
         suggestions: aiResponseData.suggestedActions,
       });
-      
-      const aiMessageForHistory: MessageType = {
-        id: Date.now().toString() + "_ai", 
+
+      // For summarization, use the full history available up to this point
+      const aiMessageForSummary: MessageType = {
+        id: Date.now().toString() + "_ai",
         text: aiResponseData.responseText,
         sender: "ai",
         suggestions: aiResponseData.suggestedActions,
         timestamp: new Date(),
       };
-      const updatedMessagesForSummary = currentMessages.concat([userMessageForHistory, aiMessageForHistory]);
-      const historyForSummary = updatedMessagesForSummary
+      // currentMessages includes all messages fetched so far for the conversation
+      // userMessageForHistory is the current user message
+      // aiMessageForSummary is the AI response we just received
+      const updatedMessagesForSummary = currentMessages.concat([userMessageForHistory, aiMessageForSummary]);
+      const fullHistoryForSummary = updatedMessagesForSummary
          .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || (msg.suggestions ? msg.suggestions.join(', ') : '')}`)
         .join("\n");
 
-      if (selectedConversationId) { 
-        summarizeConversation({ conversationHistory: historyForSummary })
+      if (selectedConversationId) {
+        summarizeConversation({ conversationHistory: fullHistoryForSummary })
           .then(summaryData => {
-            if (summaryData?.summary && selectedConversationId) { 
+            if (summaryData?.summary && selectedConversationId) {
               updateConversation({ id: selectedConversationId, summary: summaryData.summary, lastMessageText: aiResponseData.responseText.substring(0,100) });
             }
           })
@@ -105,7 +112,7 @@ export function ChatView() {
         sender: "ai",
       });
     } finally {
-      setIsAiResponding(false); 
+      setIsAiResponding(false);
     }
   };
 
@@ -122,8 +129,8 @@ export function ChatView() {
       </div>
     );
   }
-  
-  if (isLoadingMessages && (!messages || messages.length === 0)) { 
+
+  if (isLoadingMessages && (!messages || messages.length === 0)) {
      return (
         <div className="flex flex-col items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -132,7 +139,7 @@ export function ChatView() {
      );
   }
 
-  // Display a message if the chat is empty after loading
+  // Display a message if the chat is empty after loading and AI is not responding to first message
   if (!isLoadingMessages && selectedConversationId && messages && messages.length === 0 && !isAiResponding) {
     return (
       <div className="flex flex-col h-full bg-background">
@@ -152,8 +159,8 @@ export function ChatView() {
         {messages && messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} onSuggestionClick={handleSuggestionClick} />
         ))}
-        {isAiResponding && 
-         (!messages || messages.length === 0 || (messages[messages.length -1]?.sender !== 'ai' && messages[messages.length -1]?.sender !== 'system')) && ( 
+        {isAiResponding &&
+         (messages && messages.length > 0 && messages[messages.length -1]?.sender === 'user') && (
            <div className="flex items-start space-x-3 py-3 justify-start">
              <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary text-primary-foreground">
@@ -170,4 +177,3 @@ export function ChatView() {
     </div>
   );
 }
-
