@@ -19,13 +19,15 @@ const nextConfig: NextConfig = {
     ],
   },
   webpack: (config, { isServer }) => {
-    // For client-side bundles, provide a fallback for 'async_hooks'
-    // This prevents errors when Node.js-specific modules are imported by client-side code.
+    // For client-side bundles, prevent errors when Node.js-specific modules are imported.
     if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        async_hooks: false, // Provide an empty module for async_hooks on the client
-      };
+      // Ensure resolve and alias objects exist
+      config.resolve = config.resolve || {};
+      config.resolve.alias = config.resolve.alias || {};
+
+      // Alias 'async_hooks' to false for client-side bundles
+      // This effectively makes require('async_hooks') return false on the client.
+      config.resolve.alias.async_hooks = false;
     }
 
     // Important: return the modified config
