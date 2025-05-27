@@ -1,4 +1,5 @@
 import type {NextConfig} from 'next';
+import path from 'path'; // Import the 'path' module
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -19,15 +20,14 @@ const nextConfig: NextConfig = {
     ],
   },
   webpack: (config, { isServer }) => {
+    // Ensure resolve and alias objects exist
+    config.resolve = config.resolve || {};
+    config.resolve.alias = config.resolve.alias || {};
+
     // For client-side bundles, prevent errors when Node.js-specific modules are imported.
     if (!isServer) {
-      // Ensure resolve and alias objects exist
-      config.resolve = config.resolve || {};
-      config.resolve.alias = config.resolve.alias || {};
-
-      // Alias 'async_hooks' to false for client-side bundles
-      // This effectively makes require('async_hooks') return false on the client.
-      config.resolve.alias.async_hooks = false;
+      // Alias 'async_hooks' to an empty shim file for client-side bundles.
+      config.resolve.alias.async_hooks = path.resolve(__dirname, 'src/lib/empty-async-hooks-shim.ts');
     }
 
     // Important: return the modified config
