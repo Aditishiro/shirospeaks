@@ -8,7 +8,7 @@ import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, MessageCircle } from "lucide-react";
 import { generateInitialPrompt } from "@/ai/flows/generate-initial-prompt";
-import { suggestFollowUpActions } from "@/ai/flows/suggest-follow-up-actions";
+import { generateAiResponse } from "@/ai/flows/generate-ai-response"; // Updated import
 import { summarizeConversation } from "@/ai/flows/summarize-conversation";
 import { useConversations } from "@/hooks/useConversations";
 import type { Message as MessageType } from "@/types";
@@ -37,10 +37,9 @@ export function ChatView() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Handle initial prompt for new or empty selected conversations
   useEffect(() => {
     const setupInitialPrompt = async () => {
-      if (selectedConversationId && (!messages || messages.length === 0) && !isLoadingMessages) {
+      if (selectedConversationId && (!messages || messages.length === 0) && !isLoadingMessages && !isAiResponding) {
         setIsAiResponding(true);
         try {
           const initialPromptData = await generateInitialPrompt();
@@ -49,11 +48,12 @@ export function ChatView() {
               conversationId: selectedConversationId,
               text: initialPromptData.prompt,
               sender: "system",
+              // Optionally, add hardcoded suggestions for the initial system prompt
+              // suggestions: ["What can you do?", "Help me with my finances"],
             });
           }
         } catch (error) {
           console.error("Failed to get initial prompt:", error);
-          // Add a fallback system message
            await addMessage({
               conversationId: selectedConversationId,
               text: "Hello! How can I assist you today?",
@@ -65,52 +65,70 @@ export function ChatView() {
       }
     };
     setupInitialPrompt();
-  }, [selectedConversationId, messages, isLoadingMessages, addMessage, setIsAiResponding]);
+  }, [selectedConversationId, messages, isLoadingMessages, addMessage, setIsAiResponding, isAiResponding]);
 
   const handleSendMessage = async (messageText: string) => {
     if (!selectedConversationId || !messageText.trim()) return;
 
     setIsAiResponding(true);
+    const userMessageId = Date.now().toString(); // temp ID for optimistic update
+    const userMessageForHistory: MessageType = {
+      id: userMessageId,
+      text: messageText,
+      sender: "user",
+      timestamp: new Date(),
+    };
+
     try {
-      // Add user message
       await addMessage({
         conversationId: selectedConversationId,
         text: messageText,
         sender: "user",
       });
-
+      
       // Construct conversation history for AI
-      const conversationHistory = (messages ?? [])
-        .concat([{ text: messageText, sender: "user", id: "temp", timestamp: new Date() }]) // Add current message
-        .map(msg => `${msg.sender === "user" ? "User" : "AI"}: ${msg.text || (msg.suggestions ? msg.suggestions.join(', ') : '')}`)
+      // Use the current messages state + the new user message for the most up-to-date history
+      const currentMessages = messages ?? [];
+      const conversationHistory = currentMessages
+        .concat([userMessageForHistory]) 
+        .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || (msg.suggestions ? msg.suggestions.join(', ') : '')}`)
         .join("\n");
       
-      const followUpActionsData = await suggestFollowUpActions({ conversationHistory });
-
-      if (followUpActionsData?.suggestedActions && followUpActionsData.suggestedActions.length > 0) {
-        await addMessage({
-          conversationId: selectedConversationId,
-          text: "", // AI message is the suggestions themselves
-          sender: "ai",
-          suggestions: followUpActionsData.suggestedActions,
-        });
-      } else {
-         await addMessage({
-          conversationId: selectedConversationId,
-          text: "I'm not sure how to respond to that. Here are some general things you can try:",
-          sender: "ai",
-          suggestions: ["Check account balance", "View transaction history", "Contact support"], // Fallback suggestions
-        });
-      }
+      const aiResponseData = await generateAiResponse({ conversationHistory, currentMessage: messageText });
       
-      // Summarize conversation for update
-      const updatedHistoryForSummary = conversationHistory + 
-        (followUpActionsData?.suggestedActions ? `\nAI: ${followUpActionsData.suggestedActions.join(', ')}` : '');
-        
-      const summaryData = await summarizeConversation({ conversationHistory: updatedHistoryForSummary });
-      if (summaryData?.summary) {
-        await updateConversation({ id: selectedConversationId, summary: summaryData.summary });
+      await addMessage({
+        conversationId: selectedConversationId,
+        text: aiResponseData.responseText,
+        sender: "ai",
+        suggestions: aiResponseData.suggestedActions,
+      });
+      
+      // Decoupled Summarization:
+      // Create a snapshot of messages *after* AI response for summary
+      const aiMessageForHistory: MessageType = {
+        id: Date.now().toString() + "_ai", // temp ID
+        text: aiResponseData.responseText,
+        sender: "ai",
+        suggestions: aiResponseData.suggestedActions,
+        timestamp: new Date(),
+      };
+      const updatedMessagesForSummary = currentMessages.concat([userMessageForHistory, aiMessageForHistory]);
+      const historyForSummary = updatedMessagesForSummary
+         .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || (msg.suggestions ? msg.suggestions.join(', ') : '')}`)
+        .join("\n");
+
+      if (selectedConversationId) { // Ensure ID is still valid
+        summarizeConversation({ conversationHistory: historyForSummary })
+          .then(summaryData => {
+            if (summaryData?.summary && selectedConversationId) { // Re-check selectedConversationId in case it changed
+              updateConversation({ id: selectedConversationId, summary: summaryData.summary, lastMessageText: aiResponseData.responseText.substring(0,100) });
+            }
+          })
+          .catch(error => {
+            console.error("Error summarizing conversation in background:", error);
+          });
       }
+
 
     } catch (error) {
       console.error("Error in chat flow:", error);
@@ -120,7 +138,7 @@ export function ChatView() {
         sender: "ai",
       });
     } finally {
-      setIsAiResponding(false);
+      setIsAiResponding(false); // Unlock input after primary response
     }
   };
 
@@ -129,7 +147,7 @@ export function ChatView() {
   };
 
 
-  if (!selectedConversationId) {
+  if (!selectedConversationId && !isLoadingMessages) { // Added !isLoadingMessages to prevent flicker if conversations load slowly
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
         <MessageCircle className="w-16 h-16 text-muted-foreground mb-4" />
@@ -138,20 +156,25 @@ export function ChatView() {
       </div>
     );
   }
+  
+  if (isLoadingMessages && !messages?.length) { // Show loader only if messages are truly loading for the first time
+     return (
+        <div className="flex flex-col items-center justify-center h-full">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground mt-2">Loading conversation...</p>
+        </div>
+     );
+  }
+
 
   return (
     <div className="flex flex-col h-full bg-background">
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
-        {isLoadingMessages && (
-          <div className="flex justify-center items-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        )}
-        {!isLoadingMessages && messages && messages.map((msg) => (
+        {messages && messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} onSuggestionClick={handleSuggestionClick} />
         ))}
-        {isAiResponding && !isLoadingMessages && ( // Show AI typing indicator only if not initial loading
-           <div className="flex items-start space-x-3 py-3 justify-start">
+        {isAiResponding && ( 
+           <div className="flex items-start space-x-3 py-3 justify-start pl-10"> {/* Aligned with AI messages */}
              <Loader2 className="h-5 w-5 animate-spin text-primary mt-1" />
              <span className="text-sm text-muted-foreground">LUMEN is thinking...</span>
            </div>

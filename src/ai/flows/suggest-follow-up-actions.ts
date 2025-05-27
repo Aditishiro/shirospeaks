@@ -1,3 +1,8 @@
+
+// This file is being replaced by generate-ai-response.ts
+// Please delete this file.
+// If you need its content for generate-ai-response.ts, it was:
+/*
 'use server';
 
 /**
@@ -6,7 +11,7 @@
  * Exports:
  * - suggestFollowUpActions: A function that suggests follow-up actions.
  */
-
+/*
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
@@ -43,7 +48,7 @@ const prompt = ai.definePrompt({
 Conversation History:
 {{{conversationHistory}}}
 
-Suggested Actions:`, // Ensure correct Handlebars usage
+Suggested Actions:`,
 });
 
 const suggestFollowUpActionsFlow = ai.defineFlow(
@@ -57,3 +62,4 @@ const suggestFollowUpActionsFlow = ai.defineFlow(
     return output!;
   }
 );
+*/
