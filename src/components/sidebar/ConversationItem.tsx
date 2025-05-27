@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Conversation } from "@/types";
@@ -7,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { MessageSquare, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from 'date-fns';
 import { useConversations } from "@/hooks/useConversations"; // For delete
+import type { Timestamp } from "firebase/firestore"; // Import Timestamp type
+import React, { useEffect, useState } from "react"; // Import useEffect and useState
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -16,6 +19,16 @@ export function ConversationItem({ conversation }: ConversationItemProps) {
   const { selectedConversationId, setSelectedConversationId } = useAppContext();
   const { deleteConversation } = useConversations();
   const isActive = selectedConversationId === conversation.id;
+  const [formattedTime, setFormattedTime] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (conversation.updatedAt) {
+      const dateToFormat = (conversation.updatedAt as Timestamp)?.toDate
+        ? (conversation.updatedAt as Timestamp).toDate()
+        : new Date(conversation.updatedAt);
+      setFormattedTime(formatDistanceToNow(dateToFormat, { addSuffix: true }));
+    }
+  }, [conversation.updatedAt]);
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent selecting conversation when deleting
@@ -53,10 +66,7 @@ export function ConversationItem({ conversation }: ConversationItemProps) {
           {getDisplayText()}
         </span>
         <span className="text-xs text-muted-foreground">
-          {conversation.updatedAt && formatDistanceToNow(
-            (conversation.updatedAt as Timestamp)?.toDate ? (conversation.updatedAt as Timestamp).toDate() : new Date(conversation.updatedAt), 
-            { addSuffix: true }
-          )}
+          {formattedTime || "..."}
         </span>
       </div>
        <Trash2 
