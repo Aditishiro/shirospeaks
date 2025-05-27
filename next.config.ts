@@ -30,8 +30,8 @@ const nextConfig: NextConfig = {
     if (!isServer) {
       const shimPath = path.resolve(__dirname, 'src/lib/empty-async-hooks-shim.ts');
       
-      // Use fallback for Node.js core modules like 'async_hooks'
-      config.resolve.fallback.async_hooks = shimPath; 
+      // Use fallback 'false' for Node.js core modules like 'async_hooks' to prevent resolution errors
+      config.resolve.fallback.async_hooks = false; 
       
       // Alias problematic OpenTelemetry modules to the same empty shim.
       // This attempts to prevent these server-side modules from being bundled entirely on the client.
