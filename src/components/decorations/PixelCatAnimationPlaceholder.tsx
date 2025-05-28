@@ -12,30 +12,35 @@ const ShiroCatSVG = () => (
     aria-label="Cute cat icon"
     role="img"
   >
-    <path
-      d="M50 90C72.0914 90 90 72.0914 90 50C90 27.9086 72.0914 10 50 10C27.9086 10 10 27.9086 10 50C10 72.0914 27.9086 90 50 90Z"
-      fill="hsl(var(--card))" 
-      stroke="hsl(var(--foreground))"
-      strokeWidth="3"
-    />
+    {/* Head */}
+    <circle cx="50" cy="50" r="35" fill="hsl(var(--card))" stroke="hsl(var(--foreground))" strokeWidth="2.5" />
+
     {/* Ears */}
-    <path d="M35 30 C30 15, 20 25, 35 30 Z" fill="hsl(var(--accent))" opacity="0.5" />
-    <path d="M65 30 C70 15, 80 25, 65 30 Z" fill="hsl(var(--accent))" opacity="0.5" />
-    <path d="M38 32 C35 20, 25 28, 38 32 Z" fill="hsl(var(--card))" />
-    <path d="M62 32 C65 20, 75 28, 62 32 Z" fill="hsl(var(--card))" />
-    {/* Eyes */}
-    <circle cx="40" cy="45" r="5" fill="hsl(var(--foreground))" />
-    <circle cx="60" cy="45" r="5" fill="hsl(var(--foreground))" />
-    {/* Nose */}
-    <path d="M48 55 Q50 60 52 55Z" fill="hsl(var(--accent))" />
-    {/* Mouth whiskers */}
-    <path d="M40 60 Q50 65 60 60" stroke="hsl(var(--foreground))" strokeWidth="1.5" fill="none" />
-    <path d="M30 55 L40 58" stroke="hsl(var(--foreground))" strokeWidth="1" />
-    <path d="M30 60 L40 60" stroke="hsl(var(--foreground))" strokeWidth="1" />
-    <path d="M30 65 L40 62" stroke="hsl(var(--foreground))" strokeWidth="1" />
-    <path d="M70 55 L60 58" stroke="hsl(var(--foreground))" strokeWidth="1" />
-    <path d="M70 60 L60 60" stroke="hsl(var(--foreground))" strokeWidth="1" />
-    <path d="M70 65 L60 62" stroke="hsl(var(--foreground))" strokeWidth="1" />
+    <path d="M30 30 Q35 10 50 25 C40 28 30 30 30 30 Z" fill="hsl(var(--accent))" opacity="0.6" />
+    <path d="M70 30 Q65 10 50 25 C60 28 70 30 70 30 Z" fill="hsl(var(--accent))" opacity="0.6" />
+    <path d="M33 32 Q37 18 50 28 C42 30 33 32 33 32 Z" fill="hsl(var(--card))" />
+    <path d="M67 32 Q63 18 50 28 C58 30 67 32 67 32 Z" fill="hsl(var(--card))" />
+
+
+    {/* Eyes - larger and rounder */}
+    <circle cx="40" cy="48" r="6" fill="hsl(var(--foreground))" />
+    <circle cx="60" cy="48" r="6" fill="hsl(var(--foreground))" />
+    {/* Eye highlights */}
+    <circle cx="42" cy="46" r="1.5" fill="hsl(var(--card))" />
+    <circle cx="62" cy="46" r="1.5" fill="hsl(var(--card))" />
+
+    {/* Nose - smaller and simpler */}
+    <path d="M48 60 Q50 63 52 60 Z" fill="hsl(var(--accent))" />
+
+    {/* Mouth - simple smile */}
+    <path d="M45 68 Q50 72 55 68" stroke="hsl(var(--foreground))" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+
+    {/* Whiskers - fewer and softer */}
+    <path d="M28 58 L40 60" stroke="hsl(var(--foreground))" strokeWidth="1" strokeLinecap="round" />
+    <path d="M28 63 L40 63" stroke="hsl(var(--foreground))" strokeWidth="1" strokeLinecap="round" />
+
+    <path d="M72 58 L60 60" stroke="hsl(var(--foreground))" strokeWidth="1" strokeLinecap="round" />
+    <path d="M72 63 L60 63" stroke="hsl(var(--foreground))" strokeWidth="1" strokeLinecap="round" />
   </svg>
 );
 
@@ -45,7 +50,7 @@ export function PixelCatAnimationPlaceholder() {
     <div className="my-4 p-2 border-2 border-dashed border-muted-foreground/50 rounded-md inline-block">
       <ShiroCatSVG />
       <p className="text-xs text-muted-foreground mt-1 italic text-center">
-        Shiro is here!
+        Shiro is purr-fectly here!
       </p>
     </div>
   );
