@@ -47,7 +47,7 @@ const ShiroCatSVG = () => (
 
 export function PixelCatAnimationPlaceholder() {
   return (
-    <div className="my-4 p-2 border-2 border-dashed border-muted-foreground/50 rounded-md inline-block">
+    <div className="my-4 p-2 flex flex-col items-center justify-center">
       <ShiroCatSVG />
       <p className="text-xs text-muted-foreground mt-1 italic text-center">
         Shiro is purr-fectly here!
