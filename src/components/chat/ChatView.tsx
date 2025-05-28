@@ -7,28 +7,27 @@ import { useMessages } from "@/hooks/useMessages";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Cat } from "lucide-react"; // Changed MessageCircle and Bot to Cat
+import { Loader2, Cat } from "lucide-react";
 import { generateAiResponse, type GenerateAiResponseOutput } from "@/ai/flows/generate-ai-response";
 import { summarizeConversation } from "@/ai/flows/summarize-conversation";
 import { useConversations } from "@/hooks/useConversations";
 import type { Message as MessageType } from "@/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { PixelCatAnimationPlaceholder } from "@/components/decorations/PixelCatAnimationPlaceholder";
 
-const AI_RESPONSE_TIMEOUT_MS = 30000; 
+const AI_RESPONSE_TIMEOUT_MS = 30000;
 
 export function ChatView() {
   const {
     selectedConversationId,
     isAiResponding,
     setIsAiResponding,
-    currentUserId,
   } = useAppContext();
   const { messages, isLoadingMessages, addMessage } = useMessages(selectedConversationId);
   const { updateConversation } = useConversations();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const aiResponseAbortControllerRef = useRef<AbortController | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
-
 
   const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
@@ -56,27 +55,29 @@ export function ChatView() {
     }
     aiResponseAbortControllerRef.current = new AbortController();
     const signal = aiResponseAbortControllerRef.current.signal;
-    
-    const userMessageForHistory: MessageType = { 
-      id: Date.now().toString() + "_user_temp", 
+
+    const userMessageForHistory: MessageType = {
+      id: Date.now().toString() + "_user_temp",
       text: messageText,
       sender: "user",
       timestamp: new Date(),
     };
 
     try {
-      console.log("[ChatView] Attempting to add user message:", messageText);
+      console.log("[ChatView] Attempting to add user message to Firestore:", messageText);
       await addMessage({
         conversationId: selectedConversationId,
         text: messageText,
         sender: "user",
       });
-      console.log("[ChatView] User message added or addMessage call completed.");
+      console.log("[ChatView] User message added via addMessage call.");
     } catch (error: any) {
       console.error("[ChatView] Error adding user message to Firestore:", error.name, error.message, error.stack);
-      setClientError(`Failed to send your message due to a database error: ${error.message}. Please try again.`);
+      setClientError(`Failed to send your message. Database error: ${error.message}. Please try again.`);
+      // Even if adding message fails, we might still want to try getting an AI response
+      // or we might decide to stop here. For now, let's proceed to AI.
     }
-    
+
     try {
       console.log("[ChatView] Calling generateAiResponse Server Action for:", messageText);
       const aiResponsePromise = generateAiResponse({
@@ -107,28 +108,28 @@ export function ChatView() {
           console.log("[ChatView] Error occurred for an aborted request. Ignoring.");
           return;
         }
-        
+
         let errorMessage = "Sorry, I encountered an error processing your request. Please try again.";
         if (raceError.message === 'AI_RESPONSE_CLIENT_TIMEOUT') {
-          errorMessage = "Sorry, the AI is taking too long to respond. Please try asking again.";
+          errorMessage = "Sorry, Shiro is taking too long to respond. Please try asking again.";
         } else if (raceError.message) {
           errorMessage = `AI Error: ${raceError.message}`;
         }
         setClientError(errorMessage);
-
+        // Add the error message as an AI message to the chat
         if (selectedConversationId) {
             await addMessage({
                 conversationId: selectedConversationId,
                 text: errorMessage,
-                sender: "ai",
+                sender: "ai", // Or "system" if preferred for errors
             });
         }
-        return; 
+        return;
       }
 
       if (!aiResponseData || typeof aiResponseData.responseText !== 'string') {
         console.warn("[ChatView] Received invalid or empty AI response data:", aiResponseData);
-        const invalidResponseMessage = "I seem to be having trouble formulating a response. Could you try again?";
+        const invalidResponseMessage = "Shiro seems to be having trouble formulating a response. Could you try again?";
         setClientError(invalidResponseMessage);
         if (selectedConversationId && !signal.aborted) {
           await addMessage({
@@ -158,8 +159,8 @@ export function ChatView() {
         const updatedMessagesForSummary = [...currentMessages, userMessageForHistory, aiMessageForSummary];
 
         const fullHistoryForSummary = updatedMessagesForSummary
-          .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`)
-          .join("\n").substring(0, 15000); 
+          .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "Shiro")}: ${msg.text || ''}`)
+          .join("\n").substring(0, 15000);
 
         console.log('[ChatView] Triggering background summarization...');
         summarizeConversation({ conversationHistory: fullHistoryForSummary })
@@ -176,11 +177,11 @@ export function ChatView() {
           });
       }
 
-    } catch (error: any) { 
+    } catch (error: any) {
       console.error("[ChatView] Outer error in handleSendMessage (likely after AI response was received):", error.name, error.message, error.stack);
-      const outerErrorMessage = "Sorry, an unexpected error occurred after getting the AI response. Please try again.";
+      const outerErrorMessage = "Sorry, an unexpected error occurred after getting Shiro's response. Please try again.";
       setClientError(outerErrorMessage);
-      if (selectedConversationId && !signal.aborted) { 
+      if (selectedConversationId && !signal.aborted) {
          await addMessage({
             conversationId: selectedConversationId,
             text: outerErrorMessage,
@@ -191,12 +192,12 @@ export function ChatView() {
       console.log('[ChatView] handleSendMessage finally block. Aborted state:', signal.aborted);
       if (aiResponseAbortControllerRef.current && aiResponseAbortControllerRef.current.signal === signal && !signal.aborted) {
          setIsAiResponding(false);
-         aiResponseAbortControllerRef.current = null; 
+         aiResponseAbortControllerRef.current = null;
          console.log('[ChatView] Reset isAiResponding to false and cleared current abort controller.');
       } else {
          console.log('[ChatView] Not resetting isAiResponding; a newer request is active or this one was aborted/completed by another path, or already reset.');
          if (aiResponseAbortControllerRef.current && aiResponseAbortControllerRef.current.signal === signal) {
-            setIsAiResponding(false); 
+            setIsAiResponding(false);
          }
       }
     }
@@ -209,9 +210,13 @@ export function ChatView() {
   if (!selectedConversationId && !isLoadingMessages) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
-        <Cat className="w-16 h-16 text-muted-foreground mb-4" /> {/* Changed MessageCircle to Cat */}
-        <h2 className="text-2xl font-semibold mb-2">Welcome to Shiro Speaks</h2> {/* Changed LUMEN to Shiro Speaks */}
-        <p className="text-muted-foreground">Select a conversation or start a new one to begin.</p>
+        <PixelCatAnimationPlaceholder />
+        <h2 className="text-2xl font-semibold mb-2 mt-4">Welcome to Shiro Speaks</h2>
+        <p className="text-muted-foreground">
+          Select a conversation or start a new one to begin.
+          <br />
+          Fun fact - Shiro loves cats!
+        </p>
       </div>
     );
   }
@@ -227,19 +232,23 @@ export function ChatView() {
 
   if (!isLoadingMessages && selectedConversationId && messages && messages.length === 0 && !isAiResponding) {
     return (
-      <div className="flex flex-col h-full bg-background">
+      <div className="flex flex-col h-full">
         <div className="flex-grow flex flex-col items-center justify-center text-center p-8">
-          <Cat className="w-16 h-16 text-muted-foreground mb-4" /> {/* Changed Bot to Cat */}
-          <h2 className="text-xl font-semibold mb-2">Chat is Empty</h2>
-          <p className="text-muted-foreground">Type your message below to start the conversation.</p>
+          <PixelCatAnimationPlaceholder />
+          <h2 className="text-xl font-semibold mb-2 mt-4">Chat is Empty</h2>
+          <p className="text-muted-foreground">
+            Type your message below to start the conversation.
+            <br />
+            Fun fact - Shiro loves cats!
+          </p>
         </div>
         <ChatInput onSendMessage={handleSendMessage} isLoading={isAiResponding} />
       </div>
     );
   }
-  
+
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full">
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
         {messages && messages.map((msg) => (
           <ChatMessage key={msg.id} message={msg} onSuggestionClick={handleSuggestionClick} />
@@ -249,16 +258,16 @@ export function ChatView() {
            <div className="flex items-start space-x-3 py-3 justify-start">
              <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary text-primary-foreground">
-                    <Cat className="h-5 w-5 animate-spin" /> {/* Changed Loader2 to Cat and added animate-spin */}
+                    <Cat className="h-5 w-5 animate-spin" />
                 </AvatarFallback>
              </Avatar>
-             <div className="bg-card text-card-foreground p-3 rounded-xl shadow-md max-w-[70%]">
-                <p className="text-sm text-muted-foreground">Shiro is thinking...</p> {/* Changed LUMEN to Shiro */}
+             <div className="bg-card/60 dark:bg-zinc-800/60 backdrop-blur-md border border-border/30 dark:border-zinc-700/50 p-3 rounded-xl shadow-md max-w-[70%]">
+                <p className="text-sm text-muted-foreground">Shiro is thinking...</p>
              </div>
            </div>
         )}
         {clientError && (
-            <div className="p-4 my-2 text-sm text-red-700 bg-red-100 rounded-md shadow-md">
+            <div className="p-4 my-2 text-sm text-destructive-foreground bg-destructive/80 rounded-md shadow-md">
                 Client-side error: {clientError}
             </div>
         )}

@@ -5,7 +5,7 @@ import type { Message } from "@/types";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown, User, Cat } from "lucide-react"; // Changed Bot to Cat
+import { ThumbsUp, ThumbsDown, User, Cat } from "lucide-react";
 import { format } from 'date-fns';
 import { useMessages } from "@/hooks/useMessages";
 import { useAppContext } from "@/contexts/AppContext";
@@ -21,7 +21,7 @@ export function ChatMessage({ message, onSuggestionClick }: ChatMessageProps) {
   const { selectedConversationId } = useAppContext();
   const { updateMessageFeedback } = useMessages(selectedConversationId);
   const isUser = message.sender === "user";
-  const isSystem = message.sender === "system"; 
+  const isSystem = message.sender === "system";
   const [formattedTimestamp, setFormattedTimestamp] = useState<string>("");
 
   useEffect(() => {
@@ -31,11 +31,11 @@ export function ChatMessage({ message, onSuggestionClick }: ChatMessageProps) {
         if (!isNaN(dateToFormat.getTime())) {
           setFormattedTimestamp(format(dateToFormat, "p"));
         } else {
-          setFormattedTimestamp(""); 
+          setFormattedTimestamp("");
         }
       } catch (e) {
         console.error("Error formatting timestamp:", e);
-        setFormattedTimestamp(""); 
+        setFormattedTimestamp("");
       }
     }
   }, [message.timestamp]);
@@ -63,20 +63,22 @@ export function ChatMessage({ message, onSuggestionClick }: ChatMessageProps) {
       {!isUser && (
         <Avatar className="h-8 w-8">
           <AvatarFallback className="bg-primary text-primary-foreground">
-            <Cat size={18} /> {/* Changed Bot to Cat */}
+            <Cat size={18} />
           </AvatarFallback>
         </Avatar>
       )}
-      <Card 
+      <Card
         className={cn(
           "max-w-[70%] rounded-xl p-0 shadow-md",
-          isUser ? "bg-primary text-primary-foreground" : "bg-card text-card-foreground",
+          isUser
+            ? "bg-primary text-primary-foreground"
+            : "bg-card/60 dark:bg-zinc-800/60 backdrop-blur-md border border-border/30 dark:border-zinc-700/50 text-card-foreground",
           isSystem ? "bg-accent/30 border-accent/50" : ""
         )}
       >
         <CardContent className="p-3">
           {message.text && <p className="text-sm whitespace-pre-wrap">{message.text}</p>}
-          
+
           {message.sender === "ai" && message.suggestions && message.suggestions.length > 0 && (
             <div className="mt-2 space-y-2">
               <p className="text-sm font-medium mb-1">Here are some suggestions:</p>
@@ -94,7 +96,7 @@ export function ChatMessage({ message, onSuggestionClick }: ChatMessageProps) {
             </div>
           )}
         </CardContent>
-        
+
         {(message.sender === "ai" || isSystem || isUser) && (
           <CardFooter className="px-3 py-1 justify-end items-center">
             <span className="text-xs text-muted-foreground mr-2">

@@ -25,16 +25,16 @@ export function AppLayout() {
       <Sidebar collapsible="icon" className="border-r bg-sidebar text-sidebar-foreground">
         <ConversationList />
       </Sidebar>
-      <SidebarInset className="flex flex-col h-screen overflow-hidden bg-background">
-        <div className="p-2 md:hidden flex items-center justify-between border-b">
-          <span className="font-semibold text-lg text-foreground">Shiro Speaks</span> {/* Changed LUMEN to Shiro Speaks */}
+      <SidebarInset className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-950 to-black">
+        <div className="p-2 md:hidden flex items-center justify-between border-b border-border/50">
+          <span className="font-semibold text-lg text-foreground">Shiro Speaks</span>
           <SidebarTrigger asChild>
             <Button variant="ghost" size="icon">
               <PanelLeft />
             </Button>
           </SidebarTrigger>
         </div>
-         <div className="hidden md:flex items-center p-2 border-b min-h-[57px]">
+         <div className="hidden md:flex items-center p-2 border-b border-border/50 min-h-[57px]">
            <SidebarTrigger asChild>
             <Button variant="ghost" size="icon">
               <PanelLeft />
