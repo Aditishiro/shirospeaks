@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 import { useAppContext } from "@/contexts/AppContext";
 import { useMessages } from "@/hooks/useMessages";
 import { ChatMessage } from "./ChatMessage";
@@ -27,6 +27,8 @@ export function ChatView() {
   const { updateConversation } = useConversations();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const aiResponseAbortControllerRef = useRef<AbortController | null>(null);
+  const [clientError, setClientError] = useState<string | null>(null);
+
 
   const scrollToBottom = useCallback(() => {
     if (scrollAreaRef.current) {
@@ -44,84 +46,95 @@ export function ChatView() {
   const handleSendMessage = async (messageText: string) => {
     if (!selectedConversationId || !messageText.trim() || isAiResponding) return;
 
+    console.log("[ChatView] handleSendMessage called with:", messageText);
     setIsAiResponding(true);
+    setClientError(null);
+
     if (aiResponseAbortControllerRef.current) {
-      aiResponseAbortControllerRef.current.abort(); 
+      console.log("[ChatView] Aborting previous AI response request.");
+      aiResponseAbortControllerRef.current.abort();
     }
     aiResponseAbortControllerRef.current = new AbortController();
     const signal = aiResponseAbortControllerRef.current.signal;
 
-    const userMessageForHistory: MessageType = { 
-      id: Date.now().toString(),
+    const userMessageForHistory: MessageType = {
+      id: Date.now().toString() + "_user_temp", // Temp ID for local state
       text: messageText,
       sender: "user",
       timestamp: new Date(),
     };
 
     try {
+      // Add user message to Firestore and optimistic update
+      console.log("[ChatView] Adding user message to Firestore:", messageText);
       await addMessage({
         conversationId: selectedConversationId,
         text: messageText,
         sender: "user",
       });
+      console.log("[ChatView] User message added.");
 
-      const aiResponsePromise = generateAiResponse({ 
-        currentMessage: messageText 
+      console.log("[ChatView] Calling generateAiResponse Server Action for:", messageText);
+      const aiResponsePromise = generateAiResponse({
+        currentMessage: messageText
       });
 
-      const timeoutPromise = new Promise<never>((_, reject) => 
+      const timeoutPromise = new Promise<z.infer<typeof GenerateAiResponseOutputSchema>>((_, reject) =>
         setTimeout(() => {
           console.warn('[ChatView] Client-side AI response timeout triggered.');
           reject(new Error('AI_RESPONSE_CLIENT_TIMEOUT'));
         }, AI_RESPONSE_TIMEOUT_MS)
       );
-      
+
       let aiResponseData;
       try {
         console.log('[ChatView] Waiting for AI response or client timeout...');
-        // @ts-ignore
         aiResponseData = await Promise.race([aiResponsePromise, timeoutPromise]);
-        
+
         if (signal.aborted) {
-          console.log("[ChatView] AI response aborted by new message send or component unmount.");
-          // No setIsAiResponding(false) here, finally block handles it if this was the active request
-          return; 
+          console.log("[ChatView] AI response aborted by new message send or component unmount. Discarding result.");
+          return;
         }
-        console.log('[ChatView] Promise.race settled. AI Response Data:', aiResponseData);
+        console.log('[ChatView] Promise.race settled. AI Response Data:', JSON.stringify(aiResponseData, null, 2));
 
       } catch (raceError: any) {
-        console.error("[ChatView] Error in Promise.race or AI flow call:", raceError.message, raceError.name);
-        let fallbackMessage = "Sorry, I encountered an error. Please try again.";
-        if (raceError.message === 'AI_RESPONSE_CLIENT_TIMEOUT') {
-          fallbackMessage = "Sorry, I'm taking too long to respond. Please try asking again.";
+        console.error("[ChatView] Error in Promise.race (AI flow call or client timeout):", raceError);
+        if (signal.aborted) {
+          console.log("[ChatView] Error occurred for an aborted request. Ignoring.");
+          return;
         }
-        
-        if (selectedConversationId && !signal.aborted) {
+        setClientError(`Error getting AI response: ${raceError.message}`);
+        let fallbackMessage = "Sorry, I encountered an error processing your request. Please try again.";
+        if (raceError.message === 'AI_RESPONSE_CLIENT_TIMEOUT') {
+          fallbackMessage = "Sorry, the AI is taking too long to respond. Please try asking again.";
+        }
+
+        if (selectedConversationId) { // No need to check signal.aborted here, as we returned if it was
             await addMessage({
                 conversationId: selectedConversationId,
                 text: fallbackMessage,
                 sender: "ai",
             });
         }
-        // No setIsAiResponding(false) here, finally block handles it
-        return; // Important to return to allow finally to execute
+        return;
       }
 
 
-      if (!aiResponseData || !aiResponseData.responseText) {
-        console.warn("[ChatView] Received empty or invalid AI response data:", aiResponseData);
-        if (selectedConversationId && !signal.aborted) { 
+      if (!aiResponseData || typeof aiResponseData.responseText !== 'string') {
+        console.warn("[ChatView] Received invalid or empty AI response data:", aiResponseData);
+        setClientError("Received an invalid or empty response from the AI.");
+        if (selectedConversationId && !signal.aborted) {
           await addMessage({
             conversationId: selectedConversationId,
             text: "I seem to be having trouble formulating a response. Could you try again?",
             sender: "ai",
           });
         }
-        // No setIsAiResponding(false) here, finally block handles it
         return;
       }
-      
-      if (selectedConversationId && !signal.aborted) { 
+
+      console.log("[ChatView] AI response successful. Text:", aiResponseData.responseText);
+      if (selectedConversationId && !signal.aborted) {
         await addMessage({
           conversationId: selectedConversationId,
           text: aiResponseData.responseText,
@@ -129,27 +142,28 @@ export function ChatView() {
         });
 
         // Background summarization
-        const currentMessages = messages ?? []; 
+        const currentMessages = messages ?? [];
         const aiMessageForSummary: MessageType = {
           id: Date.now().toString() + "_ai_summary_ref",
           text: aiResponseData.responseText,
           sender: "ai",
           timestamp: new Date(),
         };
+        // Make sure to include the user message that triggered this AI response
         const updatedMessagesForSummary = [...currentMessages, userMessageForHistory, aiMessageForSummary];
-        
+
         const fullHistoryForSummary = updatedMessagesForSummary
           .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`)
-          .join("\n");
+          .join("\n").substring(0, 15000); // Limit history length for summary
 
         console.log('[ChatView] Triggering background summarization...');
         summarizeConversation({ conversationHistory: fullHistoryForSummary })
           .then(summaryData => {
-            if (summaryData?.summary && selectedConversationId) { // Check selectedConversationId again
+            if (summaryData?.summary && selectedConversationId) {
               console.log('[ChatView] Background summarization successful. Updating conversation summary.');
               updateConversation({ id: selectedConversationId, summary: summaryData.summary, lastMessageText: aiResponseData.responseText.substring(0,100) });
             } else {
-              console.warn('[ChatView] Background summarization did not return a valid summary.');
+              console.warn('[ChatView] Background summarization did not return a valid summary or conversation ID changed.');
             }
           })
           .catch(error => {
@@ -157,26 +171,25 @@ export function ChatView() {
           });
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("[ChatView] Outer error in handleSendMessage:", error);
-      if (selectedConversationId && !signal.aborted) { 
+      setClientError(`Outer error: ${error.message}`);
+      if (selectedConversationId && !signal.aborted) {
          await addMessage({
             conversationId: selectedConversationId,
-            text: "Sorry, an unexpected error occurred. Please try again.",
+            text: "Sorry, an unexpected error occurred sending your message. Please try again.",
             sender: "ai",
           });
       }
     } finally {
       console.log('[ChatView] handleSendMessage finally block. Aborted state:', signal.aborted);
       // Only reset loading if this was the active request that wasn't aborted.
-      // If a new message was sent, a new controller is active, and this finally block
-      // is for the older, aborted request.
-      if (aiResponseAbortControllerRef.current === signal.source) { // Check if this is still the active controller
+      if (aiResponseAbortControllerRef.current === signal.source) {
          setIsAiResponding(false);
-         aiResponseAbortControllerRef.current = null;
-         console.log('[ChatView] Reset isAiResponding to false and cleared abort controller.');
+         aiResponseAbortControllerRef.current = null; // Clear the controller for this completed/failed request
+         console.log('[ChatView] Reset isAiResponding to false and cleared current abort controller.');
       } else {
-         console.log('[ChatView] Not resetting isAiResponding; a newer request is active or this one was aborted.');
+         console.log('[ChatView] Not resetting isAiResponding; a newer request is active or this one was aborted/completed by another path.');
       }
     }
   };
@@ -216,7 +229,7 @@ export function ChatView() {
       </div>
     );
   }
-
+  
   return (
     <div className="flex flex-col h-full bg-background">
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
@@ -236,8 +249,15 @@ export function ChatView() {
              </div>
            </div>
         )}
+        {clientError && (
+            <div className="p-4 my-2 text-sm text-red-700 bg-red-100 rounded-md shadow-md">
+                Client-side error: {clientError}
+            </div>
+        )}
       </ScrollArea>
       <ChatInput onSendMessage={handleSendMessage} isLoading={isAiResponding} />
     </div>
   );
 }
+    
+    
