@@ -28,18 +28,20 @@ const nextConfig: NextConfig = {
     config.resolve.alias = config.resolve.alias || {};
     config.resolve.fallback = config.resolve.fallback || {};
 
+    const shimPath = path.resolve(__dirname, 'src/lib/empty-async-hooks-shim.ts');
+
+    // Alias for @opentelemetry/exporter-jaeger to apply to both server and client.
+    // This prevents "module not found" if @opentelemetry/sdk-node tries to optionally require it.
+    config.resolve.alias['@opentelemetry/exporter-jaeger'] = shimPath;
+
     // For client-side bundles, prevent errors when Node.js-specific modules are imported.
     if (!isServer) {
-      const shimPath = path.resolve(__dirname, 'src/lib/empty-async-hooks-shim.ts');
-      
       // Use fallback 'false' for Node.js core modules like 'async_hooks' to prevent resolution errors
       config.resolve.fallback.async_hooks = false; 
       
-      // Alias problematic OpenTelemetry modules to the same empty shim.
-      // This attempts to prevent these server-side modules from being bundled entirely on the client.
+      // Alias other problematic OpenTelemetry modules to the same empty shim for client-side.
       config.resolve.alias['@opentelemetry/context-async-hooks'] = shimPath;
       config.resolve.alias['@opentelemetry/sdk-trace-node'] = shimPath;
-      config.resolve.alias['@opentelemetry/exporter-jaeger'] = shimPath; // Added this line
     }
 
     // Important: return the modified config
