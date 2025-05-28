@@ -1,29 +1,28 @@
 
 "use client";
 
-import { useState } from "react"; // Import useState directly
+import { useState } from "react";
 import { useConversations } from "@/hooks/useConversations";
 import { useAppContext } from "@/contexts/AppContext";
 import { ConversationItem } from "./ConversationItem";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlusCircle, Loader2 } from "lucide-react";
-import { LumenLogo } from "@/components/icons/LumenLogo";
+// import { LumenLogo } from "@/components/icons/LumenLogo"; // Removed LumenLogo import
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function ConversationList() {
   const { conversations, isLoadingConversations, createConversation } = useConversations();
   const { setSelectedConversationId, selectedConversationId } = useAppContext();
-  const [isCreating, setIsCreating] = useState(false); // Use useState directly
+  const [isCreating, setIsCreating] = useState(false);
 
   const handleNewConversation = async () => {
     setIsCreating(true);
     try {
-      const newConversationId = await createConversation({ initialMessage: "" }); // Pass empty string for new convo
+      const newConversationId = await createConversation({ initialMessage: "" }); 
       setSelectedConversationId(newConversationId);
     } catch (error) {
       console.error("Failed to create new conversation:", error);
-      // TODO: Show error toast
     } finally {
       setIsCreating(false);
     }
@@ -32,7 +31,8 @@ export function ConversationList() {
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground p-2 space-y-2">
       <div className="flex items-center justify-between p-2">
-        <LumenLogo className="h-6 text-sidebar-primary" />
+        {/* Replaced LumenLogo with text */}
+        <h1 className="text-xl font-semibold text-sidebar-primary">Shiro Speaks</h1> 
         <Button variant="ghost" size="icon" onClick={handleNewConversation} disabled={isCreating} aria-label="New Conversation">
           {isCreating ? <Loader2 className="h-5 w-5 animate-spin" /> : <PlusCircle className="h-5 w-5" />}
         </Button>
@@ -54,7 +54,6 @@ export function ConversationList() {
           ))}
         </div>
       </ScrollArea>
-      {/* Optional Footer can go here */}
     </div>
   );
 }

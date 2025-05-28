@@ -5,7 +5,7 @@ import type { Message } from "@/types";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown, Bot, User } from "lucide-react";
+import { ThumbsUp, ThumbsDown, User, Cat } from "lucide-react"; // Changed Bot to Cat
 import { format } from 'date-fns';
 import { useMessages } from "@/hooks/useMessages";
 import { useAppContext } from "@/contexts/AppContext";
@@ -21,7 +21,7 @@ export function ChatMessage({ message, onSuggestionClick }: ChatMessageProps) {
   const { selectedConversationId } = useAppContext();
   const { updateMessageFeedback } = useMessages(selectedConversationId);
   const isUser = message.sender === "user";
-  const isSystem = message.sender === "system"; // For initial prompt
+  const isSystem = message.sender === "system"; 
   const [formattedTimestamp, setFormattedTimestamp] = useState<string>("");
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export function ChatMessage({ message, onSuggestionClick }: ChatMessageProps) {
       {!isUser && (
         <Avatar className="h-8 w-8">
           <AvatarFallback className="bg-primary text-primary-foreground">
-            <Bot size={18} />
+            <Cat size={18} /> {/* Changed Bot to Cat */}
           </AvatarFallback>
         </Avatar>
       )}

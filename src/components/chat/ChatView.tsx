@@ -7,15 +7,14 @@ import { useMessages } from "@/hooks/useMessages";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, MessageCircle, Bot } from "lucide-react";
-import { generateAiResponse, type GenerateAiResponseOutput } from "@/ai/flows/generate-ai-response"; // Ensure type import
+import { Loader2, Cat } from "lucide-react"; // Changed MessageCircle and Bot to Cat
+import { generateAiResponse, type GenerateAiResponseOutput } from "@/ai/flows/generate-ai-response";
 import { summarizeConversation } from "@/ai/flows/summarize-conversation";
 import { useConversations } from "@/hooks/useConversations";
 import type { Message as MessageType } from "@/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { z } from "zod"; // For type inference if GenerateAiResponseOutput is not directly exported
 
-const AI_RESPONSE_TIMEOUT_MS = 30000; // 30 seconds client-side timeout
+const AI_RESPONSE_TIMEOUT_MS = 30000; 
 
 export function ChatView() {
   const {
@@ -57,8 +56,8 @@ export function ChatView() {
     }
     aiResponseAbortControllerRef.current = new AbortController();
     const signal = aiResponseAbortControllerRef.current.signal;
-
-    const userMessageForHistory: MessageType = { // For optimistic summary
+    
+    const userMessageForHistory: MessageType = { 
       id: Date.now().toString() + "_user_temp", 
       text: messageText,
       sender: "user",
@@ -73,12 +72,9 @@ export function ChatView() {
         sender: "user",
       });
       console.log("[ChatView] User message added or addMessage call completed.");
-
     } catch (error: any) {
       console.error("[ChatView] Error adding user message to Firestore:", error.name, error.message, error.stack);
       setClientError(`Failed to send your message due to a database error: ${error.message}. Please try again.`);
-      // Do not return here if we want to try calling AI anyway
-      // For now, let's allow AI call to proceed even if DB write fails, to test AI path
     }
     
     try {
@@ -123,13 +119,12 @@ export function ChatView() {
         if (selectedConversationId) {
             await addMessage({
                 conversationId: selectedConversationId,
-                text: errorMessage, // Use the more specific error message
+                text: errorMessage,
                 sender: "ai",
             });
         }
-        return; // Important to return after handling the error from race
+        return; 
       }
-
 
       if (!aiResponseData || typeof aiResponseData.responseText !== 'string') {
         console.warn("[ChatView] Received invalid or empty AI response data:", aiResponseData);
@@ -181,11 +176,11 @@ export function ChatView() {
           });
       }
 
-    } catch (error: any) { // Outer catch, e.g., for issues if addMessage for AI response fails
+    } catch (error: any) { 
       console.error("[ChatView] Outer error in handleSendMessage (likely after AI response was received):", error.name, error.message, error.stack);
       const outerErrorMessage = "Sorry, an unexpected error occurred after getting the AI response. Please try again.";
       setClientError(outerErrorMessage);
-      if (selectedConversationId && !signal.aborted) { // Check signal here too
+      if (selectedConversationId && !signal.aborted) { 
          await addMessage({
             conversationId: selectedConversationId,
             text: outerErrorMessage,
@@ -200,12 +195,8 @@ export function ChatView() {
          console.log('[ChatView] Reset isAiResponding to false and cleared current abort controller.');
       } else {
          console.log('[ChatView] Not resetting isAiResponding; a newer request is active or this one was aborted/completed by another path, or already reset.');
-         // If this was aborted, the new request's finally block will handle resetting.
-         // If there was an error and we returned, this flow's setIsAiResponding might already be called.
-         // It's safer to ensure that if the request was aborted or the controller changed, we don't set it false here.
-         // Let's also ensure that if we reach here and it *is* the current controller and not aborted, we set it.
          if (aiResponseAbortControllerRef.current && aiResponseAbortControllerRef.current.signal === signal) {
-            setIsAiResponding(false); // Ensure it's set false if this was the last active, non-aborted attempt
+            setIsAiResponding(false); 
          }
       }
     }
@@ -218,8 +209,8 @@ export function ChatView() {
   if (!selectedConversationId && !isLoadingMessages) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
-        <MessageCircle className="w-16 h-16 text-muted-foreground mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Welcome to LUMEN</h2>
+        <Cat className="w-16 h-16 text-muted-foreground mb-4" /> {/* Changed MessageCircle to Cat */}
+        <h2 className="text-2xl font-semibold mb-2">Welcome to Shiro Speaks</h2> {/* Changed LUMEN to Shiro Speaks */}
         <p className="text-muted-foreground">Select a conversation or start a new one to begin.</p>
       </div>
     );
@@ -238,7 +229,7 @@ export function ChatView() {
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="flex-grow flex flex-col items-center justify-center text-center p-8">
-          <Bot className="w-16 h-16 text-muted-foreground mb-4" />
+          <Cat className="w-16 h-16 text-muted-foreground mb-4" /> {/* Changed Bot to Cat */}
           <h2 className="text-xl font-semibold mb-2">Chat is Empty</h2>
           <p className="text-muted-foreground">Type your message below to start the conversation.</p>
         </div>
@@ -258,11 +249,11 @@ export function ChatView() {
            <div className="flex items-start space-x-3 py-3 justify-start">
              <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary text-primary-foreground">
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Cat className="h-5 w-5 animate-spin" /> {/* Changed Loader2 to Cat and added animate-spin */}
                 </AvatarFallback>
              </Avatar>
              <div className="bg-card text-card-foreground p-3 rounded-xl shadow-md max-w-[70%]">
-                <p className="text-sm text-muted-foreground">LUMEN is thinking...</p>
+                <p className="text-sm text-muted-foreground">Shiro is thinking...</p> {/* Changed LUMEN to Shiro */}
              </div>
            </div>
         )}
@@ -276,7 +267,3 @@ export function ChatView() {
     </div>
   );
 }
-    
-    
-
-    

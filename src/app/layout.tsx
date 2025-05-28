@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'LUMEN AI Assistant',
-  description: 'Your personal financial guide',
+  title: 'Shiro Speaks',
+  description: 'Your friendly AI companion',
 };
 
 export default function RootLayout({
