@@ -8,11 +8,12 @@ import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, MessageCircle, Bot } from "lucide-react";
-import { generateAiResponse } from "@/ai/flows/generate-ai-response";
+import { generateAiResponse, type GenerateAiResponseOutput } from "@/ai/flows/generate-ai-response"; // Ensure type import
 import { summarizeConversation } from "@/ai/flows/summarize-conversation";
 import { useConversations } from "@/hooks/useConversations";
 import type { Message as MessageType } from "@/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { z } from "zod"; // For type inference if GenerateAiResponseOutput is not directly exported
 
 const AI_RESPONSE_TIMEOUT_MS = 30000; // 30 seconds client-side timeout
 
@@ -57,36 +58,43 @@ export function ChatView() {
     aiResponseAbortControllerRef.current = new AbortController();
     const signal = aiResponseAbortControllerRef.current.signal;
 
-    const userMessageForHistory: MessageType = {
-      id: Date.now().toString() + "_user_temp", // Temp ID for local state
+    const userMessageForHistory: MessageType = { // For optimistic summary
+      id: Date.now().toString() + "_user_temp", 
       text: messageText,
       sender: "user",
       timestamp: new Date(),
     };
 
     try {
-      // Add user message to Firestore and optimistic update
-      console.log("[ChatView] Adding user message to Firestore:", messageText);
+      console.log("[ChatView] Attempting to add user message:", messageText);
       await addMessage({
         conversationId: selectedConversationId,
         text: messageText,
         sender: "user",
       });
-      console.log("[ChatView] User message added.");
+      console.log("[ChatView] User message added or addMessage call completed.");
 
+    } catch (error: any) {
+      console.error("[ChatView] Error adding user message to Firestore:", error.name, error.message, error.stack);
+      setClientError(`Failed to send your message due to a database error: ${error.message}. Please try again.`);
+      // Do not return here if we want to try calling AI anyway
+      // For now, let's allow AI call to proceed even if DB write fails, to test AI path
+    }
+    
+    try {
       console.log("[ChatView] Calling generateAiResponse Server Action for:", messageText);
       const aiResponsePromise = generateAiResponse({
         currentMessage: messageText
       });
 
-      const timeoutPromise = new Promise<z.infer<typeof GenerateAiResponseOutputSchema>>((_, reject) =>
+      const timeoutPromise = new Promise<GenerateAiResponseOutput>((_, reject) =>
         setTimeout(() => {
           console.warn('[ChatView] Client-side AI response timeout triggered.');
           reject(new Error('AI_RESPONSE_CLIENT_TIMEOUT'));
         }, AI_RESPONSE_TIMEOUT_MS)
       );
 
-      let aiResponseData;
+      let aiResponseData: GenerateAiResponseOutput | undefined;
       try {
         console.log('[ChatView] Waiting for AI response or client timeout...');
         aiResponseData = await Promise.race([aiResponsePromise, timeoutPromise]);
@@ -95,38 +103,42 @@ export function ChatView() {
           console.log("[ChatView] AI response aborted by new message send or component unmount. Discarding result.");
           return;
         }
-        console.log('[ChatView] Promise.race settled. AI Response Data:', JSON.stringify(aiResponseData, null, 2));
+        console.log('[ChatView] AI Response SUCCESS:', JSON.stringify(aiResponseData, null, 2));
 
       } catch (raceError: any) {
-        console.error("[ChatView] Error in Promise.race (AI flow call or client timeout):", raceError);
+        console.error("[ChatView] AI Response ERROR in Promise.race (AI flow call or client timeout):", raceError.name, raceError.message, raceError.stack);
         if (signal.aborted) {
           console.log("[ChatView] Error occurred for an aborted request. Ignoring.");
           return;
         }
-        setClientError(`Error getting AI response: ${raceError.message}`);
-        let fallbackMessage = "Sorry, I encountered an error processing your request. Please try again.";
+        
+        let errorMessage = "Sorry, I encountered an error processing your request. Please try again.";
         if (raceError.message === 'AI_RESPONSE_CLIENT_TIMEOUT') {
-          fallbackMessage = "Sorry, the AI is taking too long to respond. Please try asking again.";
+          errorMessage = "Sorry, the AI is taking too long to respond. Please try asking again.";
+        } else if (raceError.message) {
+          errorMessage = `AI Error: ${raceError.message}`;
         }
+        setClientError(errorMessage);
 
-        if (selectedConversationId) { // No need to check signal.aborted here, as we returned if it was
+        if (selectedConversationId) {
             await addMessage({
                 conversationId: selectedConversationId,
-                text: fallbackMessage,
+                text: errorMessage, // Use the more specific error message
                 sender: "ai",
             });
         }
-        return;
+        return; // Important to return after handling the error from race
       }
 
 
       if (!aiResponseData || typeof aiResponseData.responseText !== 'string') {
         console.warn("[ChatView] Received invalid or empty AI response data:", aiResponseData);
-        setClientError("Received an invalid or empty response from the AI.");
+        const invalidResponseMessage = "I seem to be having trouble formulating a response. Could you try again?";
+        setClientError(invalidResponseMessage);
         if (selectedConversationId && !signal.aborted) {
           await addMessage({
             conversationId: selectedConversationId,
-            text: "I seem to be having trouble formulating a response. Could you try again?",
+            text: invalidResponseMessage,
             sender: "ai",
           });
         }
@@ -141,7 +153,6 @@ export function ChatView() {
           sender: "ai",
         });
 
-        // Background summarization
         const currentMessages = messages ?? [];
         const aiMessageForSummary: MessageType = {
           id: Date.now().toString() + "_ai_summary_ref",
@@ -149,12 +160,11 @@ export function ChatView() {
           sender: "ai",
           timestamp: new Date(),
         };
-        // Make sure to include the user message that triggered this AI response
         const updatedMessagesForSummary = [...currentMessages, userMessageForHistory, aiMessageForSummary];
 
         const fullHistoryForSummary = updatedMessagesForSummary
           .map(msg => `${msg.sender === "user" ? "User" : (msg.sender === "system" ? "System" : "AI")}: ${msg.text || ''}`)
-          .join("\n").substring(0, 15000); // Limit history length for summary
+          .join("\n").substring(0, 15000); 
 
         console.log('[ChatView] Triggering background summarization...');
         summarizeConversation({ conversationHistory: fullHistoryForSummary })
@@ -171,25 +181,32 @@ export function ChatView() {
           });
       }
 
-    } catch (error: any) {
-      console.error("[ChatView] Outer error in handleSendMessage:", error);
-      setClientError(`Outer error: ${error.message}`);
-      if (selectedConversationId && !signal.aborted) {
+    } catch (error: any) { // Outer catch, e.g., for issues if addMessage for AI response fails
+      console.error("[ChatView] Outer error in handleSendMessage (likely after AI response was received):", error.name, error.message, error.stack);
+      const outerErrorMessage = "Sorry, an unexpected error occurred after getting the AI response. Please try again.";
+      setClientError(outerErrorMessage);
+      if (selectedConversationId && !signal.aborted) { // Check signal here too
          await addMessage({
             conversationId: selectedConversationId,
-            text: "Sorry, an unexpected error occurred sending your message. Please try again.",
+            text: outerErrorMessage,
             sender: "ai",
           });
       }
     } finally {
       console.log('[ChatView] handleSendMessage finally block. Aborted state:', signal.aborted);
-      // Only reset loading if this was the active request that wasn't aborted.
-      if (aiResponseAbortControllerRef.current === signal.source) {
+      if (aiResponseAbortControllerRef.current && aiResponseAbortControllerRef.current.signal === signal && !signal.aborted) {
          setIsAiResponding(false);
-         aiResponseAbortControllerRef.current = null; // Clear the controller for this completed/failed request
+         aiResponseAbortControllerRef.current = null; 
          console.log('[ChatView] Reset isAiResponding to false and cleared current abort controller.');
       } else {
-         console.log('[ChatView] Not resetting isAiResponding; a newer request is active or this one was aborted/completed by another path.');
+         console.log('[ChatView] Not resetting isAiResponding; a newer request is active or this one was aborted/completed by another path, or already reset.');
+         // If this was aborted, the new request's finally block will handle resetting.
+         // If there was an error and we returned, this flow's setIsAiResponding might already be called.
+         // It's safer to ensure that if the request was aborted or the controller changed, we don't set it false here.
+         // Let's also ensure that if we reach here and it *is* the current controller and not aborted, we set it.
+         if (aiResponseAbortControllerRef.current && aiResponseAbortControllerRef.current.signal === signal) {
+            setIsAiResponding(false); // Ensure it's set false if this was the last active, non-aborted attempt
+         }
       }
     }
   };
@@ -260,4 +277,6 @@ export function ChatView() {
   );
 }
     
+    
+
     
