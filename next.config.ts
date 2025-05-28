@@ -39,6 +39,7 @@ const nextConfig: NextConfig = {
       // This attempts to prevent these server-side modules from being bundled entirely on the client.
       config.resolve.alias['@opentelemetry/context-async-hooks'] = shimPath;
       config.resolve.alias['@opentelemetry/sdk-trace-node'] = shimPath;
+      config.resolve.alias['@opentelemetry/exporter-jaeger'] = shimPath; // Added this line
     }
 
     // Important: return the modified config
